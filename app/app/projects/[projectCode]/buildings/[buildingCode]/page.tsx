@@ -2,11 +2,18 @@
 
 import type { Polygon } from "geojson";
 import Link from "next/link";
-import { use, useMemo } from "react";
+import { use, useCallback, useMemo, useState } from "react";
+import {
+  BayQuickSetup,
+  DemisingEditor,
+  spaceColor,
+} from "@/components/demising/DemisingEditor";
 import {
   BuildingExtrusionMap,
   type BuildingGeom,
 } from "@/components/map/BuildingExtrusionMap";
+import type { Bay, FrontageSide, SpaceGroup } from "@/lib/demising";
+import { splitFootprintIntoBays } from "@/lib/geometry";
 import { api } from "@/lib/trpc/react";
 
 function centroid(polygon: Polygon): [number, number] | null {
@@ -38,6 +45,42 @@ export default function BuildingDetailPage({
   const building = query.data?.building;
   const project = query.data?.project;
 
+  const baysQuery = api.bay.listByBuilding.useQuery(
+    { buildingId: building?.id ?? "" },
+    { enabled: Boolean(building?.id), retry: false },
+  );
+
+  const bays: Bay[] = useMemo(
+    () =>
+      (baysQuery.data ?? []).map(
+        (b: {
+          id: string;
+          ordinal: number;
+          width_ft: number;
+          depth_ft: number;
+          dock_door_count: number;
+          drive_in_count: number;
+          has_yard_access: boolean;
+          frontage_side: string;
+        }) => ({
+          id: b.id,
+          ordinal: b.ordinal,
+          widthFt: Number(b.width_ft),
+          depthFt: Number(b.depth_ft),
+          dockDoorCount: b.dock_door_count,
+          driveInCount: b.drive_in_count,
+          hasYardAccess: b.has_yard_access,
+          frontageSide: b.frontage_side as FrontageSide,
+        }),
+      ),
+    [baysQuery.data],
+  );
+
+  const [groups, setGroups] = useState<SpaceGroup[]>([]);
+  const handleGroupsChange = useCallback((next: SpaceGroup[]) => {
+    setGroups(next);
+  }, []);
+
   const footprint: Polygon | null = useMemo(() => {
     const fp = building?.footprint_geojson;
     if (!fp) return null;
@@ -50,8 +93,41 @@ export default function BuildingDetailPage({
     return centroid(footprint);
   }, [footprint]);
 
+  const bayPolygons = useMemo(() => {
+    if (!footprint || bays.length === 0) return {};
+    const frontage = bays[0]?.frontageSide ?? "S";
+    return splitFootprintIntoBays(footprint, bays, frontage);
+  }, [footprint, bays]);
+
   const mapBuildings: BuildingGeom[] = useMemo(() => {
     if (!building || !footprint) return [];
+
+    // If we have bays and demising groups, render one extrusion per bay
+    // colored by its owning space. Otherwise fall back to the single
+    // footprint extrusion.
+    if (bays.length > 0 && groups.length > 0 && Object.keys(bayPolygons).length > 0) {
+      const heightFt = building.height_ft ? Number(building.height_ft) : null;
+      const bayIdToGroupIndex = new Map<string, number>();
+      groups.forEach((g, i) => {
+        for (const id of g.bayIds) bayIdToGroupIndex.set(id, i);
+      });
+      return bays.flatMap((bay) => {
+        const poly = bayPolygons[bay.id];
+        if (!poly) return [];
+        const idx = bayIdToGroupIndex.get(bay.id) ?? 0;
+        return [
+          {
+            id: bay.id,
+            code: `bay-${bay.ordinal}`,
+            name: `Bay ${bay.ordinal}`,
+            footprint: poly,
+            heightFt,
+            color: spaceColor(idx),
+          },
+        ];
+      });
+    }
+
     return [
       {
         id: building.id,
@@ -62,7 +138,7 @@ export default function BuildingDetailPage({
         color: "#2563eb",
       },
     ];
-  }, [building, footprint]);
+  }, [building, footprint, bays, groups, bayPolygons]);
 
   return (
     <main className="flex h-screen flex-col">
@@ -115,13 +191,30 @@ export default function BuildingDetailPage({
         <section className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[360px_1fr]">
           <aside className="overflow-y-auto border-r border-neutral-200 bg-white p-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-              Bays
+              Demising
             </h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Bays and the demising editor land in Phase 4. Once bays are
-              defined you&rsquo;ll be able to group them into spaces and see
-              how SF, frontage, dock doors, and parking redistribute live.
-            </p>
+
+            {bays.length === 0 ? (
+              <div className="mt-3">
+                <BayQuickSetup buildingId={building.id} />
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-col gap-4">
+                <DemisingEditor
+                  buildingId={building.id}
+                  bays={bays}
+                  totalCarParking={0}
+                  totalTrailerParking={0}
+                  onChange={handleGroupsChange}
+                />
+                <details className="text-xs text-neutral-500">
+                  <summary className="cursor-pointer">Reset bay grid</summary>
+                  <div className="mt-2">
+                    <BayQuickSetup buildingId={building.id} />
+                  </div>
+                </details>
+              </div>
+            )}
 
             <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-neutral-500">
               Stats
