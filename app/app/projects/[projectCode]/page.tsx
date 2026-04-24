@@ -69,13 +69,12 @@ export default function ProjectDetailPage({
           <section className="mt-10">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Buildings</h2>
-              <button
-                disabled
-                className="rounded-md bg-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-500"
-                title="Coming in Phase 3"
+              <Link
+                href={`/app/projects/${project.data.code}/buildings/new`}
+                className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
               >
                 Add building
-              </button>
+              </Link>
             </div>
 
             {buildings.isLoading && (

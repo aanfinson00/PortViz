@@ -73,6 +73,9 @@ create table public.building (
   project_id uuid not null references public.project (id) on delete cascade,
   code text not null,
   name text,
+  -- GeoJSON Polygon (source of truth for the UI); synced into footprint_geom
+  -- on write so spatial queries still work.
+  footprint_geojson jsonb,
   footprint_geom geography(Polygon, 4326),
   height_ft numeric(6, 2),
   num_floors int default 1,
@@ -86,6 +89,25 @@ create table public.building (
   updated_at timestamptz not null default now(),
   unique (project_id, code)
 );
+
+create or replace function public.set_building_footprint_geom()
+returns trigger language plpgsql as $$
+begin
+  if new.footprint_geojson is not null then
+    new.footprint_geom = ST_SetSRID(
+      ST_GeomFromGeoJSON(new.footprint_geojson::text),
+      4326
+    )::geography;
+  else
+    new.footprint_geom = null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_building_footprint_geom
+  before insert or update of footprint_geojson on public.building
+  for each row execute function public.set_building_footprint_geom();
 
 create index building_org_idx on public.building (org_id);
 create index building_project_idx on public.building (project_id);
