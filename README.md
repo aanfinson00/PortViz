@@ -25,6 +25,42 @@ npm run typecheck            # strict TypeScript
 npm run build                # production build
 ```
 
+## First-time Supabase setup
+
+1. Create a Supabase project and copy the URL + anon key into `.env.local`.
+2. Add `SUPABASE_SERVICE_ROLE_KEY` (optional — only needed for `/share/[token]`).
+3. Apply the migrations in order:
+   ```bash
+   supabase link --project-ref <ref>
+   supabase db push
+   ```
+   (Or run them manually against `postgres` — the four files in
+   `supabase/migrations/` apply clean top-to-bottom.)
+4. Create an org and add yourself as an owner. Simplest path in the SQL editor:
+   ```sql
+   insert into public.org (id, name, slug)
+     values (gen_random_uuid(), 'My Portfolio', 'my-portfolio');
+   insert into public.org_member (org_id, user_id, role)
+     select id, auth.uid(), 'owner' from public.org where slug = 'my-portfolio';
+   ```
+5. Set your JWT custom claim so the app knows which org you&rsquo;re acting as.
+   Either attach a post-login trigger that writes `app_metadata.org_id`, or
+   update the user&rsquo;s metadata manually:
+   ```sql
+   update auth.users
+     set raw_app_meta_data = jsonb_set(
+       coalesce(raw_app_meta_data, '{}'::jsonb),
+       '{org_id}',
+       to_jsonb((select id::text from public.org where slug = 'my-portfolio'))
+     )
+     where id = auth.uid();
+   ```
+6. Create a storage bucket named `documents` (migration `0003_storage.sql`
+   does this for you when you run it).
+7. Grab a public Mapbox token and put it in `NEXT_PUBLIC_MAPBOX_TOKEN`.
+
+Sign in, open `/app`, click &ldquo;New project&rdquo;, and you&rsquo;re off.
+
 ## Data model spine
 
 Every entity has a UUID and a human code. Composite IDs:
