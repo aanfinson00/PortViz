@@ -31,6 +31,11 @@ create table public.project (
   code text not null,
   name text not null,
   address text,
+  -- Plain numeric columns for easy reads via PostgREST. The geography column
+  -- below is kept in sync on insert/update by set_project_location_geom()
+  -- and is what spatial queries should use.
+  lat double precision,
+  lng double precision,
   location geography(Point, 4326),
   site_geom geography(Polygon, 4326),
   description text,
@@ -39,6 +44,23 @@ create table public.project (
   updated_at timestamptz not null default now(),
   unique (org_id, code)
 );
+
+-- Keep project.location in sync with lat/lng so writers only need to set one.
+create or replace function public.set_project_location_geom()
+returns trigger language plpgsql as $$
+begin
+  if new.lat is not null and new.lng is not null then
+    new.location = ST_SetSRID(ST_MakePoint(new.lng, new.lat), 4326)::geography;
+  else
+    new.location = null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_project_location_geom
+  before insert or update of lat, lng on public.project
+  for each row execute function public.set_project_location_geom();
 
 create index project_org_idx on public.project (org_id);
 create index project_location_idx on public.project using gist (location);

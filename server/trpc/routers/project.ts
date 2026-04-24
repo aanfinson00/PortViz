@@ -38,11 +38,6 @@ export const projectRouter = router({
   create: orgProcedure
     .input(projectInput)
     .mutation(async ({ ctx, input }) => {
-      const location =
-        input.lat !== undefined && input.lng !== undefined
-          ? `SRID=4326;POINT(${input.lng} ${input.lat})`
-          : null;
-
       const { data, error } = await ctx.supabase
         .from("project")
         .insert({
@@ -51,7 +46,8 @@ export const projectRouter = router({
           name: input.name,
           address: input.address ?? null,
           description: input.description ?? null,
-          location,
+          lat: input.lat ?? null,
+          lng: input.lng ?? null,
         })
         .select()
         .single();
