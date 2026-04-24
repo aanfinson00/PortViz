@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { validateDemisingScheme } from "@/lib/demising";
-import { orgProcedure, router } from "../init";
+import { editorProcedure, orgProcedure, router } from "../init";
 
 import { codeSchema } from "@/lib/codes";
 
@@ -41,7 +41,7 @@ export const demisingRouter = router({
    * them) are preserved across rewires — we only change which bays belong to
    * which space. Optionally snapshots the result as a named demising_scheme.
    */
-  applyCurrent: orgProcedure
+  applyCurrent: editorProcedure
     .input(applyInput)
     .mutation(async ({ ctx, input }) => {
       // Validate bays belong to this building under the caller's org before
@@ -178,7 +178,7 @@ export const demisingRouter = router({
    * bays into spaces; we validate contiguity/coverage server-side before
    * persisting, then optionally mark the scheme active.
    */
-  save: orgProcedure.input(schemeInput).mutation(async ({ ctx, input }) => {
+  save: editorProcedure.input(schemeInput).mutation(async ({ ctx, input }) => {
     // Load bays + spaces to validate the partition before we write anything.
     const [{ data: bays, error: bayErr }, { data: spaces, error: spaceErr }] =
       await Promise.all([

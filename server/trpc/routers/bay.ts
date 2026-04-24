@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { orgProcedure, router } from "../init";
+import { editorProcedure, orgProcedure, router } from "../init";
 
 const bayFields = {
   ordinal: z.number().int().min(1),
@@ -35,7 +35,7 @@ export const bayRouter = router({
       return data ?? [];
     }),
 
-  create: orgProcedure.input(bayInput).mutation(async ({ ctx, input }) => {
+  create: editorProcedure.input(bayInput).mutation(async ({ ctx, input }) => {
     const { data, error } = await ctx.supabase
       .from("bay")
       .insert({
@@ -61,7 +61,7 @@ export const bayRouter = router({
    * can adjust the bay grid without hand-creating each one. All inserts are
    * scoped to the caller's org; RLS enforces the same.
    */
-  replaceAll: orgProcedure
+  replaceAll: editorProcedure
     .input(bulkInput)
     .mutation(async ({ ctx, input }) => {
       const { error: deleteErr } = await ctx.supabase

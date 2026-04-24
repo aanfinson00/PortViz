@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { orgProcedure, router } from "../init";
+import { editorProcedure, orgProcedure, router } from "../init";
 
 const leaseInput = z.object({
   spaceId: z.string().uuid(),
@@ -52,7 +52,7 @@ export const leaseRouter = router({
       return data ?? [];
     }),
 
-  create: orgProcedure.input(leaseInput).mutation(async ({ ctx, input }) => {
+  create: editorProcedure.input(leaseInput).mutation(async ({ ctx, input }) => {
     const { data, error } = await ctx.supabase
       .from("lease")
       .insert({

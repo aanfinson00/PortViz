@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { codeSchema } from "@/lib/codes";
-import { orgProcedure, router } from "../init";
+import { editorProcedure, orgProcedure, router } from "../init";
 
 /**
  * Zod for a GeoJSON Polygon in WGS84. We don't enforce winding order here;
@@ -84,7 +84,7 @@ export const buildingRouter = router({
       return { project, building };
     }),
 
-  create: orgProcedure
+  create: editorProcedure
     .input(buildingInput)
     .mutation(async ({ ctx, input }) => {
       const { data, error } = await ctx.supabase

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { codeSchema } from "@/lib/codes";
-import { orgProcedure, router } from "../init";
+import { editorProcedure, orgProcedure, router } from "../init";
 
 const spaceInput = z.object({
   buildingId: z.string().uuid(),
@@ -64,7 +64,7 @@ export const spaceRouter = router({
       return { project, building, space };
     }),
 
-  create: orgProcedure.input(spaceInput).mutation(async ({ ctx, input }) => {
+  create: editorProcedure.input(spaceInput).mutation(async ({ ctx, input }) => {
     const { data, error } = await ctx.supabase
       .from("space")
       .insert({

@@ -61,3 +61,24 @@ export const orgProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx: { ...ctx, orgId: ctx.orgId } });
 });
+
+/**
+ * Editor-level procedure: rejects viewers. Looks up the caller's role in
+ * org_member. Owner and editor may mutate; viewer may only read.
+ */
+export const editorProcedure = orgProcedure.use(async ({ ctx, next }) => {
+  const { data, error } = await ctx.supabase
+    .from("org_member")
+    .select("role")
+    .eq("org_id", ctx.orgId)
+    .eq("user_id", ctx.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || data.role === "viewer") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Your role does not permit write access.",
+    });
+  }
+  return next({ ctx: { ...ctx, role: data.role as "owner" | "editor" } });
+});

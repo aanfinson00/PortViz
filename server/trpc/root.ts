@@ -7,6 +7,8 @@ import { tenantRouter } from "./routers/tenant";
 import { leaseRouter } from "./routers/lease";
 import { demisingRouter } from "./routers/demising";
 import { documentRouter } from "./routers/document";
+import { orgRouter } from "./routers/org";
+import { shareRouter } from "./routers/share";
 
 export const appRouter = router({
   project: projectRouter,
@@ -17,6 +19,8 @@ export const appRouter = router({
   lease: leaseRouter,
   demising: demisingRouter,
   document: documentRouter,
+  org: orgRouter,
+  share: shareRouter,
 });
 
 export type AppRouter = typeof appRouter;

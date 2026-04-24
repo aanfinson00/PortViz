@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { codeSchema } from "@/lib/codes";
-import { orgProcedure, router } from "../init";
+import { editorProcedure, orgProcedure, router } from "../init";
 
 const tenantInput = z.object({
   code: codeSchema,
@@ -25,7 +25,7 @@ export const tenantRouter = router({
     return data ?? [];
   }),
 
-  create: orgProcedure.input(tenantInput).mutation(async ({ ctx, input }) => {
+  create: editorProcedure.input(tenantInput).mutation(async ({ ctx, input }) => {
     const { data, error } = await ctx.supabase
       .from("tenant")
       .insert({

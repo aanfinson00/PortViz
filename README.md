@@ -50,7 +50,7 @@ scoped by `org_id`.
 | 3     | 3D buildings (Mapbox fill-extrusion on footprint polygons)     | done      |
 | 4     | Dynamic demising editor — the signature UX                     | done      |
 | 5     | Lease details, rent roll, documents via Supabase Storage       | done      |
-| 6     | Org invites, roles, public share tokens, CSV export            | todo      |
+| 6     | Org invites, roles, public share tokens, CSV export            | done      |
 
 ## Repo layout
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { orgProcedure, router } from "../init";
+import { editorProcedure, orgProcedure, router } from "../init";
 
 const entityType = z.enum(["project", "building", "space", "tenant"]);
 const documentKind = z.enum([
@@ -35,7 +35,7 @@ export const documentRouter = router({
    * The file_path is relative to the "documents" bucket, e.g.
    * `ORG_ID/ENTITY_TYPE/ENTITY_ID/FILENAME`.
    */
-  create: orgProcedure
+  create: editorProcedure
     .input(
       z.object({
         entityType,

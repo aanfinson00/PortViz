@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
+import { use, useState } from "react";
 import { api } from "@/lib/trpc/react";
 
 export default function ProjectDetailPage({
@@ -122,8 +122,97 @@ export default function ProjectDetailPage({
               </ul>
             )}
           </section>
+
+          <ShareLinks projectId={project.data.id} />
         </>
       )}
     </main>
+  );
+}
+
+function ShareLinks({ projectId }: { projectId: string }) {
+  const utils = api.useUtils();
+  const list = api.share.listForProject.useQuery(
+    { projectId },
+    { retry: false },
+  );
+  const create = api.share.create.useMutation({
+    onSuccess: () => utils.share.listForProject.invalidate({ projectId }),
+  });
+  const revoke = api.share.revoke.useMutation({
+    onSuccess: () => utils.share.listForProject.invalidate({ projectId }),
+  });
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function copy(url: string) {
+    await navigator.clipboard.writeText(url);
+    setCopied(url);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+
+  return (
+    <section className="mt-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Public share links</h2>
+          <p className="text-sm text-neutral-500">
+            Anyone with one of these URLs can view this project&rsquo;s
+            buildings in 3D, read-only.
+          </p>
+        </div>
+        <button
+          onClick={() => create.mutate({ projectId })}
+          disabled={create.isPending}
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+        >
+          {create.isPending ? "Generating…" : "New share link"}
+        </button>
+      </div>
+
+      {list.data && list.data.length > 0 ? (
+        <ul className="mt-4 divide-y divide-neutral-100 rounded-md border border-neutral-200 bg-white">
+          {list.data.map(
+            (s: {
+              id: string;
+              token: string;
+              created_at: string;
+              revoked_at: string | null;
+            }) => {
+              const url = `${origin}/share/${s.token}`;
+              return (
+                <li key={s.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                  <code className="flex-1 truncate rounded bg-neutral-100 px-2 py-1 text-xs">
+                    {url}
+                  </code>
+                  {s.revoked_at ? (
+                    <span className="text-xs text-red-600">revoked</span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => copy(url)}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        {copied === url ? "Copied" : "Copy"}
+                      </button>
+                      <button
+                        onClick={() => revoke.mutate({ shareId: s.id })}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Revoke
+                      </button>
+                    </>
+                  )}
+                </li>
+              );
+            },
+          )}
+        </ul>
+      ) : (
+        <p className="mt-4 text-sm text-neutral-500">No share links yet.</p>
+      )}
+    </section>
   );
 }

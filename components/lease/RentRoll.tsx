@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { downloadCsv, toCsv } from "@/lib/csv";
 import { api } from "@/lib/trpc/react";
 
 interface RentRollProps {
@@ -63,8 +64,45 @@ export function RentRoll({ buildingId, projectCode, buildingCode }: RentRollProp
 
   const sorted = [...rows].sort((a, b) => a.code.localeCompare(b.code));
 
+  function handleExport() {
+    const csvRows = sorted.map((s) => {
+      const lease = s.lease?.[0];
+      const tenant = firstTenant(lease?.tenant ?? null);
+      return {
+        space_id: `${projectCode}-${buildingCode}-${s.code}`,
+        tenant_code: tenant?.code ?? "",
+        tenant_name: tenant?.name ?? "",
+        start_date: lease?.start_date ?? "",
+        end_date: lease?.end_date ?? "",
+        base_rent_psf: lease?.base_rent_psf ?? "",
+        term_months: lease?.term_months ?? "",
+        status: s.status,
+      };
+    });
+    const csv = toCsv(csvRows, [
+      { key: "space_id", label: "Space ID" },
+      { key: "tenant_code", label: "Tenant Code" },
+      { key: "tenant_name", label: "Tenant" },
+      { key: "start_date", label: "Start" },
+      { key: "end_date", label: "End" },
+      { key: "base_rent_psf", label: "Rent $/SF" },
+      { key: "term_months", label: "Term (mo)" },
+      { key: "status", label: "Status" },
+    ]);
+    downloadCsv(`rent-roll-${projectCode}-${buildingCode}.csv`, csv);
+  }
+
   return (
-    <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-end">
+        <button
+          onClick={handleExport}
+          className="rounded-md border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+        >
+          Export CSV
+        </button>
+      </div>
+      <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
       <table className="w-full text-sm">
         <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
           <tr>
@@ -122,6 +160,7 @@ export function RentRoll({ buildingId, projectCode, buildingCode }: RentRollProp
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
