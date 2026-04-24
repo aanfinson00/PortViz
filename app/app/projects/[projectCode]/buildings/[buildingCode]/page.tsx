@@ -8,6 +8,7 @@ import {
   DemisingEditor,
   spaceColor,
 } from "@/components/demising/DemisingEditor";
+import { RentRoll } from "@/components/lease/RentRoll";
 import {
   BuildingExtrusionMap,
   type BuildingGeom,
@@ -49,6 +50,28 @@ export default function BuildingDetailPage({
     { buildingId: building?.id ?? "" },
     { enabled: Boolean(building?.id), retry: false },
   );
+
+  const spacesQuery = api.space.listByBuilding.useQuery(
+    { buildingId: building?.id ?? "" },
+    { enabled: Boolean(building?.id), retry: false },
+  );
+
+  const initialGroups: SpaceGroup[] = useMemo(() => {
+    const rows = spacesQuery.data ?? [];
+    return rows
+      .map(
+        (s: {
+          id: string;
+          code: string;
+          space_bay: { bay_id: string }[] | null;
+        }) => ({
+          id: s.id,
+          code: s.code,
+          bayIds: (s.space_bay ?? []).map((sb) => sb.bay_id),
+        }),
+      )
+      .filter((g) => g.bayIds.length > 0);
+  }, [spacesQuery.data]);
 
   const bays: Bay[] = useMemo(
     () =>
@@ -205,6 +228,7 @@ export default function BuildingDetailPage({
                   bays={bays}
                   totalCarParking={0}
                   totalTrailerParking={0}
+                  initialGroups={initialGroups}
                   onChange={handleGroupsChange}
                 />
                 <details className="text-xs text-neutral-500">
@@ -248,18 +272,32 @@ export default function BuildingDetailPage({
             </dl>
           </aside>
 
-          <div className="relative">
-            {center ? (
-              <BuildingExtrusionMap
-                center={center}
-                buildings={mapBuildings}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-sm text-neutral-500">
-                No footprint on file — draw one by creating a new building
-                with the polygon tool.
+          <div className="flex flex-col overflow-hidden">
+            <div className="relative min-h-[55%] flex-1">
+              {center ? (
+                <BuildingExtrusionMap
+                  center={center}
+                  buildings={mapBuildings}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-sm text-neutral-500">
+                  No footprint on file — draw one by creating a new building
+                  with the polygon tool.
+                </div>
+              )}
+            </div>
+            <div className="overflow-y-auto border-t border-neutral-200 bg-neutral-50 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                Rent roll
+              </h3>
+              <div className="mt-3">
+                <RentRoll
+                  buildingId={building.id}
+                  projectCode={project?.code ?? ""}
+                  buildingCode={building.code}
+                />
               </div>
-            )}
+            </div>
           </div>
         </section>
       )}

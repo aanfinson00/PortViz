@@ -42,15 +42,15 @@ scoped by `org_id`.
 
 ## Roadmap
 
-| Phase | Focus                                                          |
-|-------|----------------------------------------------------------------|
-| 0     | Scaffolding (Next.js, Supabase clients, tRPC) — **done**       |
-| 1     | Data model + CRUD routers — **in progress**                    |
-| 2     | Portfolio map view with pins and project detail pages          |
-| 3     | 3D buildings (Three.js on Mapbox custom layer)                 |
-| 4     | Dynamic demising editor — the signature UX                     |
-| 5     | Lease details, rent roll, documents via Supabase Storage       |
-| 6     | Org invites, roles, public share tokens, CSV export            |
+| Phase | Focus                                                          | Status    |
+|-------|----------------------------------------------------------------|-----------|
+| 0     | Scaffolding (Next.js, Supabase clients, tRPC)                  | done      |
+| 1     | Data model + CRUD routers                                      | done      |
+| 2     | Portfolio map view with pins and project detail pages          | done      |
+| 3     | 3D buildings (Mapbox fill-extrusion on footprint polygons)     | done      |
+| 4     | Dynamic demising editor — the signature UX                     | done      |
+| 5     | Lease details, rent roll, documents via Supabase Storage       | done      |
+| 6     | Org invites, roles, public share tokens, CSV export            | todo      |
 
 ## Repo layout
 

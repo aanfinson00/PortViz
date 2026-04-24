@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { AppNav } from "@/components/layout/AppNav";
 import { PortfolioMap, type ProjectPinData } from "@/components/map/PortfolioMap";
 import { NewProjectDrawer } from "@/components/map/NewProjectDrawer";
 import { api } from "@/lib/trpc/react";
@@ -41,12 +42,15 @@ export default function PortfolioMapPage() {
 
   return (
     <main className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-4">
-        <div>
-          <h1 className="text-lg font-semibold">Portfolio</h1>
-          <p className="text-sm text-neutral-500">
-            Map of all projects across your organization.
-          </p>
+      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-4">
+          <AppNav />
+          <div>
+            <h1 className="text-lg font-semibold">Portfolio</h1>
+            <p className="text-sm text-neutral-500">
+              Map of all projects across your organization.
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <button

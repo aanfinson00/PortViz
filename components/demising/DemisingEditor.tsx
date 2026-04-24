@@ -10,6 +10,11 @@ interface DemisingEditorProps {
   bays: Bay[];
   totalCarParking: number;
   totalTrailerParking: number;
+  /**
+   * Existing demising from the database. When provided, the editor's split
+   * points are derived from the bay ordinals at the boundary between groups.
+   */
+  initialGroups?: SpaceGroup[];
   onChange?: (groups: SpaceGroup[]) => void;
 }
 
@@ -24,30 +29,64 @@ interface DemisingEditorProps {
  * tool, and the Save button surfaces a clear TODO until Phase 5 wires it up.
  */
 export function DemisingEditor({
-  buildingId: _buildingId,
+  buildingId,
   bays,
   totalCarParking,
   totalTrailerParking,
+  initialGroups,
   onChange,
 }: DemisingEditorProps) {
+  const utils = api.useUtils();
+  const apply = api.demising.applyCurrent.useMutation({
+    onSuccess: () => {
+      utils.space.listByBuilding.invalidate({ buildingId });
+    },
+  });
   const sorted = useMemo(
     () => [...bays].sort((a, b) => a.ordinal - b.ordinal),
     [bays],
   );
 
   // splitAfter[i] === true means there is a boundary after bay sorted[i].
-  // The first bay of a fresh building gets no splits, so the whole building
-  // is one space by default.
+  const deriveSplits = (
+    orderedBays: Bay[],
+    groupsFromDb: SpaceGroup[] | undefined,
+  ): boolean[] => {
+    const base = orderedBays.map(() => false);
+    if (!groupsFromDb || groupsFromDb.length === 0) return base;
+
+    const bayIndex = new Map(orderedBays.map((b, i) => [b.id, i]));
+    // Map each bay to its group; place a split after every bay whose next
+    // neighbor is in a different group.
+    const bayToGroup = new Map<string, number>();
+    groupsFromDb.forEach((g, gi) => {
+      for (const bayId of g.bayIds) bayToGroup.set(bayId, gi);
+    });
+    for (let i = 0; i < orderedBays.length - 1; i++) {
+      const hereGroup = bayToGroup.get(orderedBays[i]!.id);
+      const nextGroup = bayToGroup.get(orderedBays[i + 1]!.id);
+      if (hereGroup != null && nextGroup != null && hereGroup !== nextGroup) {
+        base[i] = true;
+      }
+    }
+    return base;
+  };
+
   const [splitAfter, setSplitAfter] = useState<boolean[]>(() =>
-    sorted.map(() => false),
+    deriveSplits(sorted, initialGroups),
   );
 
-  // Keep split array in sync if the bay list changes length.
+  // Re-derive whenever the bay set or the saved groups shape changes.
+  // We key on bay id sequence + initialGroups reference so edits keep local
+  // state but an external refresh (after Save) pulls in the server truth.
+  const baySignature = sorted.map((b) => b.id).join(",");
+  const groupsSignature = (initialGroups ?? [])
+    .map((g) => `${g.code}:${g.bayIds.join("|")}`)
+    .join(";");
   useEffect(() => {
-    setSplitAfter((prev) =>
-      prev.length === sorted.length ? prev : sorted.map(() => false),
-    );
-  }, [sorted.length]);
+    setSplitAfter(deriveSplits(sorted, initialGroups));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baySignature, groupsSignature]);
 
   const groups: SpaceGroup[] = useMemo(() => {
     const out: SpaceGroup[] = [];
@@ -192,13 +231,28 @@ export function DemisingEditor({
         </ul>
       </div>
 
+      {apply.error && (
+        <p className="text-sm text-red-600">{apply.error.message}</p>
+      )}
+      {apply.isSuccess && (
+        <p className="text-sm text-emerald-700">
+          Saved {metrics.length} space{metrics.length === 1 ? "" : "s"}.
+        </p>
+      )}
+
       <div className="flex justify-end">
         <button
-          disabled
-          title="Persistence (space rows + demising_scheme) lands with the lease flow"
-          className="rounded-md bg-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-500"
+          type="button"
+          disabled={apply.isPending || groups.length === 0}
+          onClick={() =>
+            apply.mutate({
+              buildingId,
+              groups: groups.map((g) => ({ code: g.code, bayIds: g.bayIds })),
+            })
+          }
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
         >
-          Save demising (Phase 5)
+          {apply.isPending ? "Saving…" : "Save demising"}
         </button>
       </div>
     </div>

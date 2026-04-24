@@ -15,12 +15,53 @@ export const spaceRouter = router({
     .query(async ({ ctx, input }) => {
       const { data, error } = await ctx.supabase
         .from("space")
-        .select("*")
+        .select("*, space_bay (bay_id)")
         .eq("org_id", ctx.orgId)
         .eq("building_id", input.buildingId)
         .order("code");
       if (error) throw error;
       return data ?? [];
+    }),
+
+  byCompositeId: orgProcedure
+    .input(
+      z.object({
+        projectCode: codeSchema,
+        buildingCode: codeSchema,
+        spaceCode: codeSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { data: project, error: projectErr } = await ctx.supabase
+        .from("project")
+        .select("id, code, name")
+        .eq("org_id", ctx.orgId)
+        .eq("code", input.projectCode)
+        .maybeSingle();
+      if (projectErr) throw projectErr;
+      if (!project) return null;
+
+      const { data: building, error: buildingErr } = await ctx.supabase
+        .from("building")
+        .select("id, code, name")
+        .eq("org_id", ctx.orgId)
+        .eq("project_id", project.id)
+        .eq("code", input.buildingCode)
+        .maybeSingle();
+      if (buildingErr) throw buildingErr;
+      if (!building) return null;
+
+      const { data: space, error: spaceErr } = await ctx.supabase
+        .from("space")
+        .select("*, space_bay (bay_id)")
+        .eq("org_id", ctx.orgId)
+        .eq("building_id", building.id)
+        .eq("code", input.spaceCode)
+        .maybeSingle();
+      if (spaceErr) throw spaceErr;
+      if (!space) return null;
+
+      return { project, building, space };
     }),
 
   create: orgProcedure.input(spaceInput).mutation(async ({ ctx, input }) => {

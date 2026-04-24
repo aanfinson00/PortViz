@@ -23,10 +23,31 @@ export const leaseRouter = router({
     .query(async ({ ctx, input }) => {
       const { data, error } = await ctx.supabase
         .from("lease")
-        .select("*")
+        .select("*, tenant:tenant_id (id, code, name, brand_color)")
         .eq("org_id", ctx.orgId)
         .eq("space_id", input.spaceId)
         .order("start_date", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    }),
+
+  /**
+   * Rent-roll query: one row per space in a building, with its current (or
+   * most recent) lease and tenant joined in. Returned unordered by PostgREST;
+   * the UI sorts by space code.
+   */
+  rentRoll: orgProcedure
+    .input(z.object({ buildingId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("space")
+        .select(
+          `id, code, status, notes,
+           lease ( id, start_date, end_date, base_rent_psf, term_months, ti_allowance_psf, free_rent_months,
+                   tenant:tenant_id ( id, code, name, brand_color ) )`,
+        )
+        .eq("org_id", ctx.orgId)
+        .eq("building_id", input.buildingId);
       if (error) throw error;
       return data ?? [];
     }),
