@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AppNav } from "@/components/layout/AppNav";
 import { PortfolioMap, type ProjectPinData } from "@/components/map/PortfolioMap";
@@ -8,6 +9,7 @@ import { NewProjectDrawer } from "@/components/map/NewProjectDrawer";
 import { api } from "@/lib/trpc/react";
 
 export default function PortfolioMapPage() {
+  const router = useRouter();
   const me = api.auth.me.useQuery(undefined, { retry: false });
   const projectsQuery = api.project.list.useQuery(undefined, {
     retry: false,
@@ -125,18 +127,22 @@ export default function PortfolioMapPage() {
                       )}
                     </div>
                     <div className="flex gap-3 text-xs">
-                      <Link
-                        href={`/app/projects/${p.code}`}
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/app/projects/${p.code}`)}
                         className="text-blue-600 hover:underline"
                       >
                         Open project →
-                      </Link>
-                      <Link
-                        href={`/app/projects/${p.code}/edit`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(`/app/projects/${p.code}/edit`)
+                        }
                         className="text-neutral-500 hover:underline"
                       >
                         {hasPin ? "Edit" : "Set location"}
-                      </Link>
+                      </button>
                     </div>
                   </li>
                 );
