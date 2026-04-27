@@ -209,24 +209,46 @@ export function PortfolioMap({
     else map.once("load", apply);
   }, [buildings]);
 
-  // Fly to the selected project when it changes. If we also have buildings to
-  // show, zoom in further and pitch the camera so the 3D extrusions are
-  // legible.
+  // Fly to the selected project when it changes. If we have buildings to
+  // show, fit the camera to their bounds (with pitch) so even buildings
+  // drawn far from the project pin stay framed. Without buildings, fall
+  // back to a flyTo at the project's lat/lng.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedCode) return;
     const selected = projects.find((p) => p.code === selectedCode);
     if (!selected) return;
-    const has3D = buildings.length > 0;
+
+    if (buildings.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      for (const b of buildings) {
+        for (const ring of b.footprint.coordinates) {
+          for (const [lng, lat] of ring) {
+            bounds.extend([lng, lat]);
+          }
+        }
+      }
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, {
+          padding: 80,
+          pitch: 55,
+          bearing: -20,
+          maxZoom: 19,
+          duration: 1500,
+        });
+        return;
+      }
+    }
+
     map.flyTo({
       center: [selected.lng, selected.lat],
-      zoom: has3D ? 17 : 14,
-      pitch: has3D ? 55 : 0,
-      bearing: has3D ? -20 : 0,
+      zoom: 14,
+      pitch: 0,
+      bearing: 0,
       essential: true,
-      duration: 1500,
+      duration: 1200,
     });
-  }, [selectedCode, projects, buildings.length]);
+  }, [selectedCode, projects, buildings]);
 
   return (
     <div
