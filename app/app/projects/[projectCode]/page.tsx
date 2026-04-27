@@ -47,23 +47,36 @@ export default function ProjectDetailPage({
 
       {project.data && (
         <>
-          <header className="mt-4">
-            <p className="font-mono text-xs text-neutral-500">
-              {project.data.code}
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight">
-              {project.data.name}
-            </h1>
-            {project.data.address && (
-              <p className="mt-1 text-sm text-neutral-600">
-                {project.data.address}
+          <header className="mt-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="font-mono text-xs text-neutral-500">
+                {project.data.code}
               </p>
-            )}
-            {project.data.description && (
-              <p className="mt-4 max-w-2xl text-neutral-700">
-                {project.data.description}
-              </p>
-            )}
+              <h1 className="text-3xl font-bold tracking-tight">
+                {project.data.name}
+              </h1>
+              {project.data.address && (
+                <p className="mt-1 text-sm text-neutral-600">
+                  {project.data.address}
+                </p>
+              )}
+              {project.data.lat == null && (
+                <p className="mt-2 text-xs text-amber-700">
+                  No location pin set yet — open Edit to drop one on the map.
+                </p>
+              )}
+              {project.data.description && (
+                <p className="mt-4 max-w-2xl text-neutral-700">
+                  {project.data.description}
+                </p>
+              )}
+            </div>
+            <Link
+              href={`/app/projects/${project.data.code}/edit`}
+              className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            >
+              Edit
+            </Link>
           </header>
 
           <section className="mt-10">

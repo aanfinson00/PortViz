@@ -18,27 +18,26 @@ export default function PortfolioMapPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [droppedPin, setDroppedPin] = useState<{ lng: number; lat: number } | null>(null);
 
+  const allProjects = useMemo(
+    () =>
+      ((projectsQuery.data ?? []) as Array<{
+        id: string;
+        code: string;
+        name: string;
+        lat: number | null;
+        lng: number | null;
+      }>),
+    [projectsQuery.data],
+  );
+
   const pins = useMemo<ProjectPinData[]>(() => {
-    const list = projectsQuery.data ?? [];
-    return list.flatMap((p: {
-      id: string;
-      code: string;
-      name: string;
-      lat: number | null;
-      lng: number | null;
-    }) => {
+    return allProjects.flatMap((p) => {
       if (p.lat == null || p.lng == null) return [];
       return [
-        {
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          lng: p.lng,
-          lat: p.lat,
-        },
+        { id: p.id, code: p.code, name: p.name, lng: p.lng, lat: p.lat },
       ];
     });
-  }, [projectsQuery.data]);
+  }, [allProjects]);
 
   const authStatus: "loading" | "signed_out" | "no_org" | "ready" =
     me.isLoading
@@ -86,35 +85,52 @@ export default function PortfolioMapPage() {
             <p className="p-4 text-sm text-red-600">{projectsQuery.error.message}</p>
           ) : projectsQuery.isLoading ? (
             <p className="p-4 text-sm text-neutral-500">Loading projects…</p>
-          ) : pins.length === 0 ? (
+          ) : allProjects.length === 0 ? (
             <p className="p-4 text-sm text-neutral-500">
               No projects yet. Click &ldquo;New project&rdquo; or click on the
               map to drop your first pin.
             </p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {pins.map((p) => (
-                <li key={p.id}>
-                  <button
-                    onClick={() => setSelectedCode(p.code)}
-                    className={`flex w-full flex-col items-start px-4 py-3 text-left hover:bg-neutral-50 ${
-                      selectedCode === p.code ? "bg-neutral-100" : ""
-                    }`}
-                  >
-                    <span className="font-mono text-xs text-neutral-500">
-                      {p.code}
-                    </span>
-                    <span className="text-sm font-medium">{p.name}</span>
-                    <Link
-                      href={`/app/projects/${p.code}`}
-                      className="mt-1 text-xs text-blue-600 hover:underline"
-                      onClick={(e) => e.stopPropagation()}
+              {allProjects.map((p) => {
+                const hasPin = p.lat != null && p.lng != null;
+                return (
+                  <li key={p.id}>
+                    <button
+                      onClick={() => hasPin && setSelectedCode(p.code)}
+                      className={`flex w-full flex-col items-start px-4 py-3 text-left hover:bg-neutral-50 ${
+                        selectedCode === p.code ? "bg-neutral-100" : ""
+                      }`}
                     >
-                      Open project →
-                    </Link>
-                  </button>
-                </li>
-              ))}
+                      <span className="font-mono text-xs text-neutral-500">
+                        {p.code}
+                      </span>
+                      <span className="text-sm font-medium">{p.name}</span>
+                      {!hasPin && (
+                        <span className="mt-1 text-xs text-amber-700">
+                          No location yet
+                        </span>
+                      )}
+                      <span className="mt-1 flex gap-3 text-xs">
+                        <Link
+                          href={`/app/projects/${p.code}`}
+                          className="text-blue-600 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Open project →
+                        </Link>
+                        <Link
+                          href={`/app/projects/${p.code}/edit`}
+                          className="text-neutral-500 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {hasPin ? "Edit" : "Set location"}
+                        </Link>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </aside>
