@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AppNav } from "@/components/layout/AppNav";
-import { PortfolioMap, type ProjectPinData } from "@/components/map/PortfolioMap";
+import { BuildingPanel } from "@/components/map/BuildingPanel";
+import {
+  PortfolioMap,
+  type PortfolioBuilding,
+  type ProjectPinData,
+} from "@/components/map/PortfolioMap";
 import { NewProjectDrawer } from "@/components/map/NewProjectDrawer";
 import { api } from "@/lib/trpc/react";
+import type { Polygon } from "geojson";
 
 export default function PortfolioMapPage() {
+  const router = useRouter();
   const me = api.auth.me.useQuery(undefined, { retry: false });
   const projectsQuery = api.project.list.useQuery(undefined, {
     retry: false,
@@ -15,30 +23,70 @@ export default function PortfolioMapPage() {
   });
 
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [droppedPin, setDroppedPin] = useState<{ lng: number; lat: number } | null>(null);
 
+  const allProjects = useMemo(
+    () =>
+      ((projectsQuery.data ?? []) as Array<{
+        id: string;
+        code: string;
+        name: string;
+        lat: number | null;
+        lng: number | null;
+      }>),
+    [projectsQuery.data],
+  );
+
   const pins = useMemo<ProjectPinData[]>(() => {
-    const list = projectsQuery.data ?? [];
-    return list.flatMap((p: {
-      id: string;
-      code: string;
-      name: string;
-      lat: number | null;
-      lng: number | null;
-    }) => {
+    return allProjects.flatMap((p) => {
       if (p.lat == null || p.lng == null) return [];
       return [
-        {
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          lng: p.lng,
-          lat: p.lat,
-        },
+        { id: p.id, code: p.code, name: p.name, lng: p.lng, lat: p.lat },
       ];
     });
-  }, [projectsQuery.data]);
+  }, [allProjects]);
+
+  const selectedProject = useMemo(
+    () => allProjects.find((p) => p.code === selectedCode) ?? null,
+    [allProjects, selectedCode],
+  );
+
+  const buildingsQuery = api.building.listByProject.useQuery(
+    { projectId: selectedProject?.id ?? "" },
+    { enabled: Boolean(selectedProject?.id), retry: false },
+  );
+
+  const buildingMetaById = useMemo(() => {
+    const map = new Map<string, { code: string }>();
+    for (const b of buildingsQuery.data ?? []) {
+      map.set((b as { id: string }).id, { code: (b as { code: string }).code });
+    }
+    return map;
+  }, [buildingsQuery.data]);
+
+  const selectedBuildings = useMemo<PortfolioBuilding[]>(() => {
+    if (!selectedProject) return [];
+    return (buildingsQuery.data ?? []).flatMap(
+      (b: {
+        id: string;
+        code: string;
+        footprint_geojson: Polygon | null;
+        height_ft: number | null;
+      }) => {
+        if (!b.footprint_geojson) return [];
+        return [
+          {
+            id: b.id,
+            code: b.code,
+            footprint: b.footprint_geojson,
+            heightFt: b.height_ft ? Number(b.height_ft) : null,
+          },
+        ];
+      },
+    );
+  }, [buildingsQuery.data, selectedProject]);
 
   const authStatus: "loading" | "signed_out" | "no_org" | "ready" =
     me.isLoading
@@ -75,7 +123,7 @@ export default function PortfolioMapPage() {
       </header>
 
       <section className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[360px_1fr]">
-        <aside className="overflow-y-auto border-r border-neutral-200 bg-white">
+        <aside className="relative z-10 overflow-y-auto border-r border-neutral-200 bg-white">
           {authStatus === "loading" ? (
             <p className="p-4 text-sm text-neutral-500">Checking session…</p>
           ) : authStatus === "signed_out" ? (
@@ -86,35 +134,79 @@ export default function PortfolioMapPage() {
             <p className="p-4 text-sm text-red-600">{projectsQuery.error.message}</p>
           ) : projectsQuery.isLoading ? (
             <p className="p-4 text-sm text-neutral-500">Loading projects…</p>
-          ) : pins.length === 0 ? (
+          ) : allProjects.length === 0 ? (
             <p className="p-4 text-sm text-neutral-500">
               No projects yet. Click &ldquo;New project&rdquo; or click on the
               map to drop your first pin.
             </p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {pins.map((p) => (
-                <li key={p.id}>
-                  <button
-                    onClick={() => setSelectedCode(p.code)}
-                    className={`flex w-full flex-col items-start px-4 py-3 text-left hover:bg-neutral-50 ${
+              {allProjects.map((p) => {
+                const hasPin = p.lat != null && p.lng != null;
+                const projectUrl = `/app/projects/${p.code}`;
+                const editUrl = `/app/projects/${p.code}/edit`;
+                return (
+                  <li
+                    key={p.id}
+                    className={`px-4 py-3 ${
                       selectedCode === p.code ? "bg-neutral-100" : ""
                     }`}
                   >
-                    <span className="font-mono text-xs text-neutral-500">
-                      {p.code}
-                    </span>
-                    <span className="text-sm font-medium">{p.name}</span>
-                    <Link
-                      href={`/app/projects/${p.code}`}
-                      className="mt-1 text-xs text-blue-600 hover:underline"
-                      onClick={(e) => e.stopPropagation()}
+                    <a
+                      href={projectUrl}
+                      onClick={(e) => {
+                        // Belt-and-suspenders: if anything intercepts the
+                        // default anchor behavior, force the navigation
+                        // explicitly via window.location.
+                        if (e.button === 0 && !e.metaKey && !e.ctrlKey) {
+                          e.preventDefault();
+                          window.location.assign(projectUrl);
+                        }
+                      }}
+                      className="block rounded-md p-2 hover:bg-neutral-50"
                     >
-                      Open project →
-                    </Link>
-                  </button>
-                </li>
-              ))}
+                      <p className="font-mono text-xs text-neutral-500">
+                        {p.code}
+                      </p>
+                      <p className="text-sm font-medium text-neutral-900">
+                        {p.name}
+                      </p>
+                      {!hasPin && (
+                        <p className="text-xs text-amber-700">
+                          No location yet
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-blue-600">
+                        Open project →
+                      </p>
+                    </a>
+                    <div className="mt-2 flex gap-2 text-xs">
+                      {hasPin && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCode(p.code)}
+                          className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-neutral-600 hover:bg-neutral-50"
+                          title="Fly to on the map"
+                        >
+                          Locate on map
+                        </button>
+                      )}
+                      <a
+                        href={editUrl}
+                        onClick={(e) => {
+                          if (e.button === 0 && !e.metaKey && !e.ctrlKey) {
+                            e.preventDefault();
+                            window.location.assign(editUrl);
+                          }
+                        }}
+                        className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-neutral-600 hover:bg-neutral-50"
+                      >
+                        {hasPin ? "Edit" : "Set location"}
+                      </a>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </aside>
@@ -122,14 +214,27 @@ export default function PortfolioMapPage() {
         <div className="relative">
           <PortfolioMap
             projects={pins}
+            buildings={selectedBuildings}
             selectedCode={selectedCode}
             onSelect={setSelectedCode}
+            onSelectBuilding={(id) => setSelectedBuildingId(id)}
             onMapClick={(lngLat) => {
               setDroppedPin(lngLat);
               setDrawerOpen(true);
             }}
             dropMode={drawerOpen}
           />
+
+          {selectedBuildingId && selectedProject && (
+            <BuildingPanel
+              buildingId={selectedBuildingId}
+              projectCode={selectedProject.code}
+              buildingCode={
+                buildingMetaById.get(selectedBuildingId)?.code ?? ""
+              }
+              onClose={() => setSelectedBuildingId(null)}
+            />
+          )}
         </div>
       </section>
 

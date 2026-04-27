@@ -131,10 +131,18 @@ export function NewProjectDrawer({
             />
           </Field>
         </div>
-        <p className="-mt-2 text-xs text-neutral-500">
-          Tip: click anywhere on the map before opening this panel to pre-fill
-          the pin.
-        </p>
+        {!droppedPin && (
+          <p className="-mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <strong>Heads up:</strong> without a latitude/longitude no pin
+            will appear on the map. Either type coordinates above or close
+            this panel, click the map, and reopen.
+          </p>
+        )}
+        {droppedPin && (
+          <p className="-mt-2 text-xs text-emerald-700">
+            Pinned at {droppedPin.lat.toFixed(4)}, {droppedPin.lng.toFixed(4)}.
+          </p>
+        )}
 
         <Field label="Description">
           <textarea
