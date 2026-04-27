@@ -8,8 +8,10 @@ import { NewProjectDrawer } from "@/components/map/NewProjectDrawer";
 import { api } from "@/lib/trpc/react";
 
 export default function PortfolioMapPage() {
+  const me = api.auth.me.useQuery(undefined, { retry: false });
   const projectsQuery = api.project.list.useQuery(undefined, {
     retry: false,
+    enabled: me.data?.signedIn === true && !!me.data?.orgId,
   });
 
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
@@ -38,7 +40,14 @@ export default function PortfolioMapPage() {
     });
   }, [projectsQuery.data]);
 
-  const notReady = projectsQuery.isError;
+  const authStatus: "loading" | "signed_out" | "no_org" | "ready" =
+    me.isLoading
+      ? "loading"
+      : me.data?.signedIn === false
+        ? "signed_out"
+        : !me.data?.orgId
+          ? "no_org"
+          : "ready";
 
   return (
     <main className="flex h-screen flex-col">
@@ -67,8 +76,14 @@ export default function PortfolioMapPage() {
 
       <section className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[360px_1fr]">
         <aside className="overflow-y-auto border-r border-neutral-200 bg-white">
-          {notReady ? (
-            <DevBanner />
+          {authStatus === "loading" ? (
+            <p className="p-4 text-sm text-neutral-500">Checking session…</p>
+          ) : authStatus === "signed_out" ? (
+            <SignedOutBanner />
+          ) : authStatus === "no_org" ? (
+            <NoOrgBanner />
+          ) : projectsQuery.isError ? (
+            <p className="p-4 text-sm text-red-600">{projectsQuery.error.message}</p>
           ) : projectsQuery.isLoading ? (
             <p className="p-4 text-sm text-neutral-500">Loading projects…</p>
           ) : pins.length === 0 ? (
@@ -128,25 +143,46 @@ export default function PortfolioMapPage() {
   );
 }
 
-function DevBanner() {
+function SignedOutBanner() {
+  return (
+    <div className="p-4">
+      <p className="text-sm font-semibold text-amber-700">You&rsquo;re signed out.</p>
+      <p className="mt-1 text-sm text-neutral-600">
+        Sign in to view and manage your portfolio.
+      </p>
+      <div className="mt-4 flex gap-2">
+        <Link
+          href="/login"
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+        >
+          Sign in
+        </Link>
+        <Link
+          href="/signup"
+          className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+        >
+          Create account
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function NoOrgBanner() {
   return (
     <div className="p-4">
       <p className="text-sm font-semibold text-amber-700">
-        Supabase not yet connected.
+        Set up your organization to get started.
       </p>
       <p className="mt-1 text-sm text-neutral-600">
-        Set{" "}
-        <code className="rounded bg-neutral-100 px-1 py-0.5 text-xs">
-          NEXT_PUBLIC_SUPABASE_URL
-        </code>{" "}
-        and{" "}
-        <code className="rounded bg-neutral-100 px-1 py-0.5 text-xs">
-          NEXT_PUBLIC_SUPABASE_ANON_KEY
-        </code>{" "}
-        in <code>.env.local</code>, run the migrations in{" "}
-        <code>supabase/migrations</code>, and make sure the signed-in user has
-        an <code>app_metadata.org_id</code> claim.
+        You&rsquo;re signed in but don&rsquo;t belong to any organization yet.
       </p>
+      <Link
+        href="/onboarding"
+        className="mt-4 inline-block rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+      >
+        Continue onboarding
+      </Link>
     </div>
   );
 }
