@@ -83,7 +83,18 @@ export function PortfolioMap({
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
 
+    // Map-wide click. If a building extrusion was hit, fire the building
+    // selector and stop. Otherwise treat it as a generic map click (used by
+    // the New Project drawer's pin-drop flow).
     map.on("click", (e) => {
+      const hit = map.queryRenderedFeatures(e.point, {
+        layers: map.getLayer(BUILDINGS_LAYER) ? [BUILDINGS_LAYER] : [],
+      });
+      const id = hit?.[0]?.properties?.id as string | undefined;
+      if (id) {
+        onSelectBuildingRef.current?.(id);
+        return;
+      }
       onMapClickRef.current?.({ lng: e.lngLat.lng, lat: e.lngLat.lat });
     });
 
@@ -115,10 +126,6 @@ export function PortfolioMap({
           },
         });
 
-        map.on("click", BUILDINGS_LAYER, (e) => {
-          const id = e.features?.[0]?.properties?.id as string | undefined;
-          if (id) onSelectBuildingRef.current?.(id);
-        });
         map.on("mouseenter", BUILDINGS_LAYER, () => {
           map.getCanvas().style.cursor = "pointer";
         });
