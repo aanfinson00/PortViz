@@ -95,39 +95,49 @@ export default function PortfolioMapPage() {
               {allProjects.map((p) => {
                 const hasPin = p.lat != null && p.lng != null;
                 return (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => hasPin && setSelectedCode(p.code)}
-                      className={`flex w-full flex-col items-start px-4 py-3 text-left hover:bg-neutral-50 ${
-                        selectedCode === p.code ? "bg-neutral-100" : ""
-                      }`}
-                    >
-                      <span className="font-mono text-xs text-neutral-500">
-                        {p.code}
-                      </span>
-                      <span className="text-sm font-medium">{p.name}</span>
-                      {!hasPin && (
-                        <span className="mt-1 text-xs text-amber-700">
-                          No location yet
-                        </span>
+                  <li
+                    key={p.id}
+                    className={`flex flex-col gap-1 px-4 py-3 ${
+                      selectedCode === p.code ? "bg-neutral-100" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-mono text-xs text-neutral-500">
+                          {p.code}
+                        </p>
+                        <p className="text-sm font-medium">{p.name}</p>
+                        {!hasPin && (
+                          <p className="text-xs text-amber-700">
+                            No location yet
+                          </p>
+                        )}
+                      </div>
+                      {hasPin && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCode(p.code)}
+                          className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+                          title="Fly to on the map"
+                        >
+                          Locate
+                        </button>
                       )}
-                      <span className="mt-1 flex gap-3 text-xs">
-                        <Link
-                          href={`/app/projects/${p.code}`}
-                          className="text-blue-600 hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Open project →
-                        </Link>
-                        <Link
-                          href={`/app/projects/${p.code}/edit`}
-                          className="text-neutral-500 hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {hasPin ? "Edit" : "Set location"}
-                        </Link>
-                      </span>
-                    </button>
+                    </div>
+                    <div className="flex gap-3 text-xs">
+                      <Link
+                        href={`/app/projects/${p.code}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Open project →
+                      </Link>
+                      <Link
+                        href={`/app/projects/${p.code}/edit`}
+                        className="text-neutral-500 hover:underline"
+                      >
+                        {hasPin ? "Edit" : "Set location"}
+                      </Link>
+                    </div>
                   </li>
                 );
               })}
