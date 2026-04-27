@@ -1,5 +1,6 @@
 "use client";
 
+import type { Polygon } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef } from "react";
@@ -12,8 +13,16 @@ export interface ProjectPinData {
   lng: number;
 }
 
+export interface PortfolioBuilding {
+  id: string;
+  code: string;
+  footprint: Polygon;
+  heightFt: number | null;
+}
+
 interface PortfolioMapProps {
   projects: ProjectPinData[];
+  buildings?: PortfolioBuilding[];
   selectedCode?: string | null;
   onSelect?: (code: string) => void;
   onMapClick?: (lngLat: { lng: number; lat: number }) => void;
@@ -23,9 +32,13 @@ interface PortfolioMapProps {
 
 const DEFAULT_CENTER: [number, number] = [-98.5795, 39.8283]; // continental US
 const DEFAULT_ZOOM = 3.2;
+const BUILDINGS_SOURCE = "portfolio-buildings";
+const BUILDINGS_LAYER = "portfolio-buildings-extrusion";
+const BUILDINGS_OUTLINE_LAYER = "portfolio-buildings-outline";
 
 export function PortfolioMap({
   projects,
+  buildings = [],
   selectedCode,
   onSelect,
   onMapClick,
@@ -61,12 +74,43 @@ export function PortfolioMap({
       style: "mapbox://styles/mapbox/light-v11",
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
+      antialias: true,
     });
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
 
     map.on("click", (e) => {
       onMapClickRef.current?.({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+    });
+
+    // Reusable building extrusion layer. Source is empty until we have data.
+    map.on("load", () => {
+      if (!map.getSource(BUILDINGS_SOURCE)) {
+        map.addSource(BUILDINGS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: BUILDINGS_LAYER,
+          type: "fill-extrusion",
+          source: BUILDINGS_SOURCE,
+          paint: {
+            "fill-extrusion-color": "#2563eb",
+            "fill-extrusion-height": ["coalesce", ["get", "heightMeters"], 10],
+            "fill-extrusion-base": 0,
+            "fill-extrusion-opacity": 0.85,
+          },
+        });
+        map.addLayer({
+          id: BUILDINGS_OUTLINE_LAYER,
+          type: "line",
+          source: BUILDINGS_SOURCE,
+          paint: {
+            "line-color": "#111827",
+            "line-width": 1,
+          },
+        });
+      }
     });
 
     mapRef.current = map;
@@ -115,19 +159,52 @@ export function PortfolioMap({
     }
   }, [projects]);
 
-  // Fly to the selected project when it changes.
+  // Sync the buildings extrusion source whenever the buildings prop changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const apply = () => {
+      const source = map.getSource(BUILDINGS_SOURCE) as
+        | mapboxgl.GeoJSONSource
+        | undefined;
+      if (!source) return;
+      source.setData({
+        type: "FeatureCollection",
+        features: buildings.map((b) => ({
+          type: "Feature",
+          geometry: b.footprint,
+          properties: {
+            id: b.id,
+            code: b.code,
+            heightMeters: (b.heightFt ?? 30) * 0.3048,
+          },
+        })),
+      });
+    };
+
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [buildings]);
+
+  // Fly to the selected project when it changes. If we also have buildings to
+  // show, zoom in further and pitch the camera so the 3D extrusions are
+  // legible.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedCode) return;
     const selected = projects.find((p) => p.code === selectedCode);
     if (!selected) return;
+    const has3D = buildings.length > 0;
     map.flyTo({
       center: [selected.lng, selected.lat],
-      zoom: 14,
+      zoom: has3D ? 17 : 14,
+      pitch: has3D ? 55 : 0,
+      bearing: has3D ? -20 : 0,
       essential: true,
-      duration: 1200,
+      duration: 1500,
     });
-  }, [selectedCode, projects]);
+  }, [selectedCode, projects, buildings.length]);
 
   return (
     <div

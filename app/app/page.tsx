@@ -4,9 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AppNav } from "@/components/layout/AppNav";
-import { PortfolioMap, type ProjectPinData } from "@/components/map/PortfolioMap";
+import {
+  PortfolioMap,
+  type PortfolioBuilding,
+  type ProjectPinData,
+} from "@/components/map/PortfolioMap";
 import { NewProjectDrawer } from "@/components/map/NewProjectDrawer";
 import { api } from "@/lib/trpc/react";
+import type { Polygon } from "geojson";
 
 export default function PortfolioMapPage() {
   const router = useRouter();
@@ -40,6 +45,38 @@ export default function PortfolioMapPage() {
       ];
     });
   }, [allProjects]);
+
+  const selectedProject = useMemo(
+    () => allProjects.find((p) => p.code === selectedCode) ?? null,
+    [allProjects, selectedCode],
+  );
+
+  const buildingsQuery = api.building.listByProject.useQuery(
+    { projectId: selectedProject?.id ?? "" },
+    { enabled: Boolean(selectedProject?.id), retry: false },
+  );
+
+  const selectedBuildings = useMemo<PortfolioBuilding[]>(() => {
+    if (!selectedProject) return [];
+    return (buildingsQuery.data ?? []).flatMap(
+      (b: {
+        id: string;
+        code: string;
+        footprint_geojson: Polygon | null;
+        height_ft: number | null;
+      }) => {
+        if (!b.footprint_geojson) return [];
+        return [
+          {
+            id: b.id,
+            code: b.code,
+            footprint: b.footprint_geojson,
+            heightFt: b.height_ft ? Number(b.height_ft) : null,
+          },
+        ];
+      },
+    );
+  }, [buildingsQuery.data, selectedProject]);
 
   const authStatus: "loading" | "signed_out" | "no_org" | "ready" =
     me.isLoading
@@ -167,6 +204,7 @@ export default function PortfolioMapPage() {
         <div className="relative">
           <PortfolioMap
             projects={pins}
+            buildings={selectedBuildings}
             selectedCode={selectedCode}
             onSelect={setSelectedCode}
             onMapClick={(lngLat) => {
