@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AppNav } from "@/components/layout/AppNav";
+import { BuildingPanel } from "@/components/map/BuildingPanel";
 import {
   PortfolioMap,
   type PortfolioBuilding,
@@ -22,6 +23,7 @@ export default function PortfolioMapPage() {
   });
 
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [droppedPin, setDroppedPin] = useState<{ lng: number; lat: number } | null>(null);
 
@@ -55,6 +57,14 @@ export default function PortfolioMapPage() {
     { projectId: selectedProject?.id ?? "" },
     { enabled: Boolean(selectedProject?.id), retry: false },
   );
+
+  const buildingMetaById = useMemo(() => {
+    const map = new Map<string, { code: string }>();
+    for (const b of buildingsQuery.data ?? []) {
+      map.set((b as { id: string }).id, { code: (b as { code: string }).code });
+    }
+    return map;
+  }, [buildingsQuery.data]);
 
   const selectedBuildings = useMemo<PortfolioBuilding[]>(() => {
     if (!selectedProject) return [];
@@ -207,12 +217,24 @@ export default function PortfolioMapPage() {
             buildings={selectedBuildings}
             selectedCode={selectedCode}
             onSelect={setSelectedCode}
+            onSelectBuilding={(id) => setSelectedBuildingId(id)}
             onMapClick={(lngLat) => {
               setDroppedPin(lngLat);
               setDrawerOpen(true);
             }}
             dropMode={drawerOpen}
           />
+
+          {selectedBuildingId && selectedProject && (
+            <BuildingPanel
+              buildingId={selectedBuildingId}
+              projectCode={selectedProject.code}
+              buildingCode={
+                buildingMetaById.get(selectedBuildingId)?.code ?? ""
+              }
+              onClose={() => setSelectedBuildingId(null)}
+            />
+          )}
         </div>
       </section>
 

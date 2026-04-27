@@ -25,6 +25,7 @@ interface PortfolioMapProps {
   buildings?: PortfolioBuilding[];
   selectedCode?: string | null;
   onSelect?: (code: string) => void;
+  onSelectBuilding?: (id: string) => void;
   onMapClick?: (lngLat: { lng: number; lat: number }) => void;
   /** When set, clicking the map doesn't pan/select — used in pin-drop mode. */
   dropMode?: boolean;
@@ -41,6 +42,7 @@ export function PortfolioMap({
   buildings = [],
   selectedCode,
   onSelect,
+  onSelectBuilding,
   onMapClick,
   dropMode = false,
 }: PortfolioMapProps) {
@@ -49,12 +51,14 @@ export function PortfolioMap({
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const onMapClickRef = useRef(onMapClick);
   const onSelectRef = useRef(onSelect);
+  const onSelectBuildingRef = useRef(onSelectBuilding);
 
   // Keep the latest callbacks accessible from stable Mapbox handlers.
   useEffect(() => {
     onMapClickRef.current = onMapClick;
     onSelectRef.current = onSelect;
-  }, [onMapClick, onSelect]);
+    onSelectBuildingRef.current = onSelectBuilding;
+  }, [onMapClick, onSelect, onSelectBuilding]);
 
   // Mount the map once.
   useEffect(() => {
@@ -109,6 +113,17 @@ export function PortfolioMap({
             "line-color": "#111827",
             "line-width": 1,
           },
+        });
+
+        map.on("click", BUILDINGS_LAYER, (e) => {
+          const id = e.features?.[0]?.properties?.id as string | undefined;
+          if (id) onSelectBuildingRef.current?.(id);
+        });
+        map.on("mouseenter", BUILDINGS_LAYER, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", BUILDINGS_LAYER, () => {
+          map.getCanvas().style.cursor = "";
         });
       }
     });
