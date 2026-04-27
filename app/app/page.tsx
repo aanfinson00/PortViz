@@ -76,7 +76,7 @@ export default function PortfolioMapPage() {
       </header>
 
       <section className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[360px_1fr]">
-        <aside className="overflow-y-auto border-r border-neutral-200 bg-white">
+        <aside className="relative z-10 overflow-y-auto border-r border-neutral-200 bg-white">
           {authStatus === "loading" ? (
             <p className="p-4 text-sm text-neutral-500">Checking session…</p>
           ) : authStatus === "signed_out" ? (
@@ -127,22 +127,18 @@ export default function PortfolioMapPage() {
                       )}
                     </div>
                     <div className="flex gap-3 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/app/projects/${p.code}`)}
-                        className="text-blue-600 hover:underline"
+                      <a
+                        href={`/app/projects/${p.code}`}
+                        className="rounded-md bg-blue-600 px-2 py-1 font-medium text-white hover:bg-blue-700"
                       >
                         Open project →
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          router.push(`/app/projects/${p.code}/edit`)
-                        }
-                        className="text-neutral-500 hover:underline"
+                      </a>
+                      <a
+                        href={`/app/projects/${p.code}/edit`}
+                        className="rounded-md border border-neutral-300 px-2 py-1 text-neutral-700 hover:bg-neutral-50"
                       >
                         {hasPin ? "Edit" : "Set location"}
-                      </button>
+                      </a>
                     </div>
                   </li>
                 );
