@@ -2,6 +2,7 @@
 
 import type { Polygon } from "geojson";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useMemo, useState } from "react";
 import {
   BayQuickSetup,
@@ -34,7 +35,16 @@ export default function BuildingDetailPage({
 }: {
   params: Promise<{ projectCode: string; buildingCode: string }>;
 }) {
+  const router = useRouter();
   const { projectCode, buildingCode } = use(params);
+  const utils = api.useUtils();
+  const remove = api.building.delete.useMutation({
+    onSuccess: async () => {
+      await utils.building.listByProject.invalidate();
+      router.push(`/app/projects/${projectCode.toUpperCase()}`);
+      router.refresh();
+    },
+  });
   const query = api.building.byCompositeId.useQuery(
     {
       projectCode: projectCode.toUpperCase(),
@@ -193,13 +203,24 @@ export default function BuildingDetailPage({
           )}
         </div>
         <div className="flex gap-2">
-          <button
-            disabled
-            className="rounded-md bg-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-500"
-            title="Demising editor lands in Phase 4"
-          >
-            Demising editor
-          </button>
+          {building && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  confirm(
+                    `Delete ${project?.code}-${building.code}? This removes its bays, spaces, leases, and document records. Cannot be undone.`,
+                  )
+                ) {
+                  remove.mutate({ id: building.id });
+                }
+              }}
+              disabled={remove.isPending}
+              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {remove.isPending ? "Deleting…" : "Delete building"}
+            </button>
+          )}
         </div>
       </header>
 

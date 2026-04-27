@@ -112,24 +112,12 @@ export default function ProjectDetailPage({
                     name: string | null;
                     total_sf: number | null;
                   }) => (
-                    <li key={b.id}>
-                      <Link
-                        href={`/app/projects/${project.data.code}/buildings/${b.code}`}
-                        className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50"
-                      >
-                        <div>
-                          <p className="font-mono text-xs text-neutral-500">
-                            {project.data.code}-{b.code}
-                          </p>
-                          <p className="text-sm font-medium">
-                            {b.name ?? `Building ${b.code}`}
-                          </p>
-                        </div>
-                        <span className="text-sm text-neutral-600">
-                          {b.total_sf ? `${b.total_sf.toLocaleString()} SF` : "—"}
-                        </span>
-                      </Link>
-                    </li>
+                    <BuildingRow
+                      key={b.id}
+                      building={b}
+                      projectCode={project.data.code}
+                      projectId={project.data.id}
+                    />
                   ),
                 )}
               </ul>
@@ -140,6 +128,71 @@ export default function ProjectDetailPage({
         </>
       )}
     </main>
+  );
+}
+
+function BuildingRow({
+  building,
+  projectCode,
+  projectId,
+}: {
+  building: {
+    id: string;
+    code: string;
+    name: string | null;
+    total_sf: number | null;
+  };
+  projectCode: string;
+  projectId: string;
+}) {
+  const utils = api.useUtils();
+  const remove = api.building.delete.useMutation({
+    onSuccess: () =>
+      utils.building.listByProject.invalidate({ projectId }),
+  });
+
+  function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      !confirm(
+        `Delete ${projectCode}-${building.code}? This removes its bays, spaces, leases, and document records. Cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    remove.mutate({ id: building.id });
+  }
+
+  return (
+    <li className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50">
+      <Link
+        href={`/app/projects/${projectCode}/buildings/${building.code}`}
+        className="flex flex-1 items-center justify-between"
+      >
+        <div>
+          <p className="font-mono text-xs text-neutral-500">
+            {projectCode}-{building.code}
+          </p>
+          <p className="text-sm font-medium">
+            {building.name ?? `Building ${building.code}`}
+          </p>
+        </div>
+        <span className="mr-4 text-sm text-neutral-600">
+          {building.total_sf
+            ? `${building.total_sf.toLocaleString()} SF`
+            : "—"}
+        </span>
+      </Link>
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={remove.isPending}
+        className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+      >
+        {remove.isPending ? "Deleting…" : "Delete"}
+      </button>
+    </li>
   );
 }
 
