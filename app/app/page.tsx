@@ -96,46 +96,63 @@ export default function PortfolioMapPage() {
             <ul className="divide-y divide-neutral-100">
               {allProjects.map((p) => {
                 const hasPin = p.lat != null && p.lng != null;
+                const projectUrl = `/app/projects/${p.code}`;
+                const editUrl = `/app/projects/${p.code}/edit`;
                 return (
                   <li
                     key={p.id}
-                    className={`flex flex-col gap-1 px-4 py-3 ${
+                    className={`px-4 py-3 ${
                       selectedCode === p.code ? "bg-neutral-100" : ""
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-mono text-xs text-neutral-500">
-                          {p.code}
+                    <a
+                      href={projectUrl}
+                      onClick={(e) => {
+                        // Belt-and-suspenders: if anything intercepts the
+                        // default anchor behavior, force the navigation
+                        // explicitly via window.location.
+                        if (e.button === 0 && !e.metaKey && !e.ctrlKey) {
+                          e.preventDefault();
+                          window.location.assign(projectUrl);
+                        }
+                      }}
+                      className="block rounded-md p-2 hover:bg-neutral-50"
+                    >
+                      <p className="font-mono text-xs text-neutral-500">
+                        {p.code}
+                      </p>
+                      <p className="text-sm font-medium text-neutral-900">
+                        {p.name}
+                      </p>
+                      {!hasPin && (
+                        <p className="text-xs text-amber-700">
+                          No location yet
                         </p>
-                        <p className="text-sm font-medium">{p.name}</p>
-                        {!hasPin && (
-                          <p className="text-xs text-amber-700">
-                            No location yet
-                          </p>
-                        )}
-                      </div>
+                      )}
+                      <p className="mt-1 text-xs text-blue-600">
+                        Open project →
+                      </p>
+                    </a>
+                    <div className="mt-2 flex gap-2 text-xs">
                       {hasPin && (
                         <button
                           type="button"
                           onClick={() => setSelectedCode(p.code)}
-                          className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+                          className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-neutral-600 hover:bg-neutral-50"
                           title="Fly to on the map"
                         >
-                          Locate
+                          Locate on map
                         </button>
                       )}
-                    </div>
-                    <div className="flex gap-3 text-xs">
                       <a
-                        href={`/app/projects/${p.code}`}
-                        className="rounded-md bg-blue-600 px-2 py-1 font-medium text-white hover:bg-blue-700"
-                      >
-                        Open project →
-                      </a>
-                      <a
-                        href={`/app/projects/${p.code}/edit`}
-                        className="rounded-md border border-neutral-300 px-2 py-1 text-neutral-700 hover:bg-neutral-50"
+                        href={editUrl}
+                        onClick={(e) => {
+                          if (e.button === 0 && !e.metaKey && !e.ctrlKey) {
+                            e.preventDefault();
+                            window.location.assign(editUrl);
+                          }
+                        }}
+                        className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-neutral-600 hover:bg-neutral-50"
                       >
                         {hasPin ? "Edit" : "Set location"}
                       </a>
