@@ -9,8 +9,10 @@ import { demisingRouter } from "./routers/demising";
 import { documentRouter } from "./routers/document";
 import { orgRouter } from "./routers/org";
 import { shareRouter } from "./routers/share";
+import { authRouter } from "./routers/auth";
 
 export const appRouter = router({
+  auth: authRouter,
   project: projectRouter,
   building: buildingRouter,
   bay: bayRouter,

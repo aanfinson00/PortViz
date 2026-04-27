@@ -14,19 +14,25 @@ export default function LandingPage() {
         footprints, and demise spaces bay-by-bay to see how SF, frontage, dock
         doors, and parking redistribute in real time.
       </p>
-      <div className="mt-10 flex gap-4">
+      <div className="mt-10 flex flex-wrap gap-4">
         <Link
-          href="/app"
+          href="/login"
           className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-800"
         >
-          Open portfolio
+          Sign in
         </Link>
-        <a
-          href="https://github.com/aanfinson00/portviz"
+        <Link
+          href="/signup"
           className="rounded-md border border-neutral-300 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
         >
-          View on GitHub
-        </a>
+          Create account
+        </Link>
+        <Link
+          href="/app"
+          className="self-center text-sm text-neutral-500 hover:text-neutral-800"
+        >
+          Already signed in? Open portfolio →
+        </Link>
       </div>
     </main>
   );
