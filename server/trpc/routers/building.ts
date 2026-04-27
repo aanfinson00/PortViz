@@ -50,6 +50,28 @@ export const buildingRouter = router({
       return data ?? [];
     }),
 
+  /**
+   * Buildings with their bays + spaces (with bay assignments) embedded.
+   * Used by the portfolio map view to render per-bay extrusions colored by
+   * the owning space without needing per-building round trips.
+   */
+  listForMap: orgProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("building")
+        .select(
+          `id, code, name, footprint_geojson, height_ft,
+           bay (id, ordinal, width_ft, depth_ft, dock_door_count, drive_in_count, has_yard_access, frontage_side),
+           space (id, code, status, space_bay (bay_id))`,
+        )
+        .eq("org_id", ctx.orgId)
+        .eq("project_id", input.projectId)
+        .order("code");
+      if (error) throw error;
+      return data ?? [];
+    }),
+
   byCompositeId: orgProcedure
     .input(
       z.object({

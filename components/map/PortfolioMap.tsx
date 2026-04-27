@@ -18,6 +18,8 @@ export interface PortfolioBuilding {
   code: string;
   footprint: Polygon;
   heightFt: number | null;
+  /** Optional fill color override; defaults to portfolio blue. */
+  color?: string;
 }
 
 interface PortfolioMapProps {
@@ -162,7 +164,7 @@ export function PortfolioMap({
           type: "fill-extrusion",
           source: BUILDINGS_SOURCE,
           paint: {
-            "fill-extrusion-color": "#2563eb",
+            "fill-extrusion-color": ["coalesce", ["get", "color"], "#2563eb"],
             "fill-extrusion-height": ["coalesce", ["get", "heightMeters"], 10],
             "fill-extrusion-base": 0,
             "fill-extrusion-opacity": 0.85,
@@ -198,6 +200,7 @@ export function PortfolioMap({
             id: b.id,
             code: b.code,
             heightMeters: (b.heightFt ?? 30) * 0.3048,
+            ...(b.color ? { color: b.color } : {}),
           },
         })),
       });
