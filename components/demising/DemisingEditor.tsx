@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, SpaceGroup } from "@/lib/demising";
 import { computeSpaceMetrics, totalBuildingSfFromBays } from "@/lib/demising";
 import { api } from "@/lib/trpc/react";
@@ -38,9 +39,11 @@ export function DemisingEditor({
 }: DemisingEditorProps) {
   const utils = api.useUtils();
   const apply = api.demising.applyCurrent.useMutation({
-    onSuccess: () => {
+    onSuccess: (res) => {
       utils.space.listByBuilding.invalidate({ buildingId });
+      toastSuccess(`Saved ${res.spaceCount} space${res.spaceCount === 1 ? "" : "s"}`);
     },
+    onError: (e) => toastError(e.message),
   });
   const sorted = useMemo(
     () => [...bays].sort((a, b) => a.ordinal - b.ordinal),
@@ -282,7 +285,11 @@ export function spaceColor(index: number): string {
 export function BayQuickSetup({ buildingId }: { buildingId: string }) {
   const utils = api.useUtils();
   const replace = api.bay.replaceAll.useMutation({
-    onSuccess: () => utils.bay.listByBuilding.invalidate({ buildingId }),
+    onSuccess: (rows) => {
+      utils.bay.listByBuilding.invalidate({ buildingId });
+      toastSuccess(`Created ${rows.length} bays`);
+    },
+    onError: (e) => toastError(e.message),
   });
 
   const [count, setCount] = useState("4");

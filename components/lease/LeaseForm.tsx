@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
 interface LeaseFormProps {
@@ -19,8 +20,10 @@ export function LeaseForm({ spaceId, onCreated }: LeaseFormProps) {
   const create = api.lease.create.useMutation({
     onSuccess: async () => {
       await utils.lease.listBySpace.invalidate({ spaceId });
+      toastSuccess("Lease saved");
       onCreated?.();
     },
+    onError: (e) => toastError(e.message),
   });
 
   const [tenantId, setTenantId] = useState("");

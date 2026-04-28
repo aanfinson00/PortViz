@@ -14,6 +14,8 @@ import {
   BuildingExtrusionMap,
   type BuildingGeom,
 } from "@/components/map/BuildingExtrusionMap";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide, SpaceGroup } from "@/lib/demising";
 import { splitFootprintIntoBays } from "@/lib/geometry";
 import { api } from "@/lib/trpc/react";
@@ -41,9 +43,11 @@ export default function BuildingDetailPage({
   const remove = api.building.delete.useMutation({
     onSuccess: async () => {
       await utils.building.listByProject.invalidate();
+      toastSuccess("Building deleted");
       router.push(`/app/projects/${projectCode.toUpperCase()}`);
       router.refresh();
     },
+    onError: (e) => toastError(e.message),
   });
   const query = api.building.byCompositeId.useQuery(
     {
@@ -177,14 +181,21 @@ export default function BuildingDetailPage({
     <main className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-4">
         <div>
-          {project && (
-            <Link
-              href={`/app/projects/${project.code}`}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              ← {project.code}
-            </Link>
-          )}
+          <Breadcrumb
+            crumbs={
+              project
+                ? [
+                    {
+                      label: project.code,
+                      href: `/app/projects/${project.code}`,
+                    },
+                    {
+                      label: building?.code ?? buildingCode.toUpperCase(),
+                    },
+                  ]
+                : []
+            }
+          />
           <h1 className="mt-1 text-lg font-semibold">
             {project?.code}
             {building?.code ? `-${building.code}` : ""}

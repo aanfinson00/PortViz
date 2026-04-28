@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { use, useState } from "react";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
 export default function ProjectDetailPage({
@@ -21,9 +23,14 @@ export default function ProjectDetailPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-8">
-      <Link href="/app" className="text-sm text-blue-600 hover:underline">
-        ← Back to portfolio
-      </Link>
+      <Breadcrumb
+        crumbs={[
+          {
+            label: projectCode.toUpperCase(),
+            href: `/app/projects/${projectCode.toUpperCase()}`,
+          },
+        ]}
+      />
 
       {project.isLoading && (
         <p className="mt-8 text-sm text-neutral-500">Loading project…</p>
@@ -155,8 +162,11 @@ function BuildingRow({
 }) {
   const utils = api.useUtils();
   const remove = api.building.delete.useMutation({
-    onSuccess: () =>
-      utils.building.listByProject.invalidate({ projectId }),
+    onSuccess: () => {
+      utils.building.listByProject.invalidate({ projectId });
+      toastSuccess(`Deleted ${projectCode}-${building.code}`);
+    },
+    onError: (e) => toastError(e.message),
   });
 
   function handleDelete(e: React.MouseEvent) {
@@ -211,10 +221,18 @@ function ShareLinks({ projectId }: { projectId: string }) {
     { retry: false },
   );
   const create = api.share.create.useMutation({
-    onSuccess: () => utils.share.listForProject.invalidate({ projectId }),
+    onSuccess: () => {
+      utils.share.listForProject.invalidate({ projectId });
+      toastSuccess("Share link created");
+    },
+    onError: (e) => toastError(e.message),
   });
   const revoke = api.share.revoke.useMutation({
-    onSuccess: () => utils.share.listForProject.invalidate({ projectId }),
+    onSuccess: () => {
+      utils.share.listForProject.invalidate({ projectId });
+      toastSuccess("Share link revoked");
+    },
+    onError: (e) => toastError(e.message),
   });
   const [copied, setCopied] = useState<string | null>(null);
 

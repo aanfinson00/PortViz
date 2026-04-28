@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
 interface NewProjectDrawerProps {
@@ -21,9 +22,11 @@ export function NewProjectDrawer({
   const create = api.project.create.useMutation({
     onSuccess: async (created) => {
       await utils.project.list.invalidate();
+      toastSuccess(`Created project ${created.code}`);
       onCreated?.(created.code);
       onClose();
     },
+    onError: (e) => toastError(e.message),
   });
 
   const [code, setCode] = useState("");

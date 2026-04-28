@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
 export default function TenantsPage() {
@@ -92,10 +93,12 @@ function NewTenantDialog({
 }) {
   const utils = api.useUtils();
   const create = api.tenant.create.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (t) => {
       await utils.tenant.list.invalidate();
+      toastSuccess(`Created tenant ${t.code}`);
       onClose();
     },
+    onError: (e) => toastError(e.message),
   });
 
   const [code, setCode] = useState("");
