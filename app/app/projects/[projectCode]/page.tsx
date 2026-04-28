@@ -82,12 +82,20 @@ export default function ProjectDetailPage({
           <section className="mt-10">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Buildings</h2>
-              <Link
-                href={`/app/projects/${project.data.code}/buildings/new`}
-                className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
-              >
-                Add building
-              </Link>
+              <div className="flex gap-2">
+                <Link
+                  href={`/app/projects/${project.data.code}/buildings/from-plan`}
+                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+                >
+                  Trace from site plan
+                </Link>
+                <Link
+                  href={`/app/projects/${project.data.code}/buildings/new`}
+                  className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+                >
+                  Quick draw on satellite
+                </Link>
+              </div>
             </div>
 
             {buildings.isLoading && (
