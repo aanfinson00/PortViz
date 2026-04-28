@@ -15,6 +15,7 @@ import {
   type BuildingGeom,
 } from "@/components/map/BuildingExtrusionMap";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { AmenitiesPanel } from "@/components/property/amenities/AmenitiesPanel";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide, SpaceGroup } from "@/lib/demising";
 import { splitFootprintIntoBays } from "@/lib/geometry";
@@ -302,6 +303,15 @@ export default function BuildingDetailPage({
                 value={building.year_built ?? "—"}
               />
             </dl>
+
+            <div className="mt-6">
+              <AmenitiesPanel
+                buildingId={building.id}
+                initialTruckCourtDepthFt={
+                  building.truck_court_depth_ft ?? null
+                }
+              />
+            </div>
           </aside>
 
           <div className="flex flex-col overflow-hidden">

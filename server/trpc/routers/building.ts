@@ -61,7 +61,7 @@ export const buildingRouter = router({
       const { data, error } = await ctx.supabase
         .from("building")
         .select(
-          `id, code, name, footprint_geojson, height_ft,
+          `id, code, name, footprint_geojson, height_ft, truck_court_depth_ft,
            bay (id, ordinal, width_ft, depth_ft, dock_door_count, drive_in_count, has_yard_access, frontage_side),
            space (id, code, status, target_sf, space_bay (bay_id))`,
         )
@@ -129,6 +129,33 @@ export const buildingRouter = router({
         .single();
       if (error) throw error;
       return data;
+    }),
+
+  /**
+   * Narrowly scoped update for site-amenity fields. Kept separate from a
+   * full building.update so callers (e.g. the inline amenities editor on
+   * the building dashboard) can't accidentally clobber other fields.
+   */
+  updateAmenities: editorProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        truckCourtDepthFt: z
+          .number()
+          .int()
+          .nonnegative()
+          .max(2000)
+          .nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("building")
+        .update({ truck_court_depth_ft: input.truckCourtDepthFt })
+        .eq("id", input.id)
+        .eq("org_id", ctx.orgId);
+      if (error) throw error;
+      return { ok: true };
     }),
 
   delete: editorProcedure

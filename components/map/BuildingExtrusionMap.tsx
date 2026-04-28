@@ -18,6 +18,25 @@ export interface BuildingGeom {
   color?: string;
 }
 
+/**
+ * A generic Mapbox overlay layer registered alongside the building
+ * extrusion. Used by feature modules (e.g. site-amenities) to render extra
+ * polygons without coupling them to this component's internals. Each layer
+ * gets its own GeoJSON source; paint is passed straight through.
+ */
+export interface OverlayLayer {
+  id: string;
+  type: "fill" | "line";
+  data: FeatureCollection<Polygon>;
+  paint: Record<string, unknown>;
+  /**
+   * Render order relative to the building extrusion. "below" inserts under
+   * the building (good for ground decals like truck courts); "above" stacks
+   * on top (good for dock-door markers). Default "above".
+   */
+  placement?: "above" | "below";
+}
+
 interface BuildingExtrusionMapProps {
   center: [number, number];
   buildings: BuildingGeom[];
@@ -30,6 +49,12 @@ interface BuildingExtrusionMapProps {
    * (and when the bounds change) so multiple buildings stay in frame.
    */
   bounds?: [[number, number], [number, number]] | null;
+  /**
+   * Extra polygon layers to render alongside the buildings. Passed-through
+   * data is re-applied whenever the array changes; layers with the same
+   * id are reused via setData() so rapid prop updates don't churn sources.
+   */
+  overlayLayers?: OverlayLayer[];
 }
 
 export function BuildingExtrusionMap({
@@ -39,6 +64,7 @@ export function BuildingExtrusionMap({
   onSelectBuilding,
   pitch = 55,
   bounds = null,
+  overlayLayers,
 }: BuildingExtrusionMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -176,6 +202,57 @@ export function BuildingExtrusionMap({
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
   }, [buildings, selectedBuildingId]);
+
+  // Sync overlay layers (separate from building extrusion). Each overlay
+  // gets its own source; existing sources are re-used via setData() on
+  // subsequent prop updates so we don't add+remove layers on every render.
+  const overlayIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const layers = overlayLayers ?? [];
+
+    const apply = () => {
+      const wantedIds = new Set(layers.map((l) => l.id));
+
+      // Remove layers that disappeared from props.
+      for (const id of Array.from(overlayIdsRef.current)) {
+        if (!wantedIds.has(id)) {
+          if (map.getLayer(id)) map.removeLayer(id);
+          if (map.getSource(id)) map.removeSource(id);
+          overlayIdsRef.current.delete(id);
+        }
+      }
+
+      for (const layer of layers) {
+        const existing = map.getSource(layer.id) as
+          | mapboxgl.GeoJSONSource
+          | undefined;
+        if (existing) {
+          existing.setData(layer.data);
+          continue;
+        }
+        map.addSource(layer.id, { type: "geojson", data: layer.data });
+        const beforeId =
+          layer.placement === "below" && map.getLayer(LAYER_ID)
+            ? LAYER_ID
+            : undefined;
+        map.addLayer(
+          {
+            id: layer.id,
+            type: layer.type,
+            source: layer.id,
+            paint: layer.paint as never,
+          },
+          beforeId,
+        );
+        overlayIdsRef.current.add(layer.id);
+      }
+    };
+
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [overlayLayers]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
