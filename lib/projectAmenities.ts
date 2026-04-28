@@ -92,6 +92,28 @@ function isAccessRole(value: unknown): value is AccessRole {
   );
 }
 
+// ----- Parking ---------------------------------------------------------
+
+export type ParkingKind = "car" | "trailer" | "mixed";
+
+export const PARKING_KIND_COLORS: Record<ParkingKind, string> = {
+  car: "#94a3b8",
+  trailer: "#f59e0b",
+  mixed: "#a78bfa",
+};
+
+/**
+ * Tolerant parser for the parking kind. Returns null when the value isn't
+ * one of the three supported kinds, so a stale/garbage row doesn't crash
+ * the renderer.
+ */
+export function parseParkingKind(value: unknown): ParkingKind | null {
+  if (value === "car" || value === "trailer" || value === "mixed") {
+    return value;
+  }
+  return null;
+}
+
 /**
  * Validate that a raw value looks like a GeoJSON Polygon for parcel
  * persistence. Returns the polygon if it parses, otherwise null.

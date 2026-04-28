@@ -232,6 +232,19 @@ export default function EditProjectPage({
             initialAccessPoints={
               (project.data as { access_points?: unknown }).access_points
             }
+            initialParkingPolygon={
+              (project.data as { parking_polygon?: unknown }).parking_polygon
+            }
+            initialParkingStalls={
+              (project.data as { parking_stalls?: number | null })
+                .parking_stalls ?? null
+            }
+            initialParkingKind={
+              (project.data as { parking_kind?: unknown }).parking_kind
+            }
+            initialYardPolygon={
+              (project.data as { yard_polygon?: unknown }).yard_polygon
+            }
           />
         </section>
       )}

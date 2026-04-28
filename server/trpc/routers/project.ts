@@ -125,6 +125,19 @@ export const projectRouter = router({
         id: z.string().uuid(),
         parcelPolygon: polygonSchema.nullable().optional(),
         accessPoints: z.array(accessPointSchema).max(40).nullable().optional(),
+        parkingPolygon: polygonSchema.nullable().optional(),
+        parkingStalls: z
+          .number()
+          .int()
+          .min(0)
+          .max(100_000)
+          .nullable()
+          .optional(),
+        parkingKind: z
+          .enum(["car", "trailer", "mixed"])
+          .nullable()
+          .optional(),
+        yardPolygon: polygonSchema.nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -134,6 +147,18 @@ export const projectRouter = router({
       }
       if (input.accessPoints !== undefined) {
         patch.access_points = input.accessPoints;
+      }
+      if (input.parkingPolygon !== undefined) {
+        patch.parking_polygon = input.parkingPolygon;
+      }
+      if (input.parkingStalls !== undefined) {
+        patch.parking_stalls = input.parkingStalls;
+      }
+      if (input.parkingKind !== undefined) {
+        patch.parking_kind = input.parkingKind;
+      }
+      if (input.yardPolygon !== undefined) {
+        patch.yard_polygon = input.yardPolygon;
       }
       if (Object.keys(patch).length === 0) return { ok: true };
       const { error } = await ctx.supabase

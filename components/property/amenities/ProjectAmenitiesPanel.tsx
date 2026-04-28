@@ -8,8 +8,10 @@ import {
   ACCESS_ROLE_COLORS,
   parseAccessPoints,
   parseParcelPolygon,
+  parseParkingKind,
   type AccessPoint,
   type AccessRole,
+  type ParkingKind,
 } from "@/lib/projectAmenities";
 import { api } from "@/lib/trpc/react";
 
@@ -18,6 +20,10 @@ interface Props {
   center: [number, number];
   initialParcel: unknown;
   initialAccessPoints: unknown;
+  initialParkingPolygon: unknown;
+  initialParkingStalls: number | null;
+  initialParkingKind: unknown;
+  initialYardPolygon: unknown;
 }
 
 const ROLE_OPTIONS: AccessRole[] = [
@@ -27,18 +33,27 @@ const ROLE_OPTIONS: AccessRole[] = [
   "emergency",
   "other",
 ];
+const PARKING_KIND_OPTIONS: ParkingKind[] = ["car", "trailer", "mixed"];
 
 /**
- * Project-level site-amenity editor: parcel boundary (drawn on satellite)
- * + access points (table form). Mounted on the project edit page; calls
- * the narrowly-scoped project.updateAmenities mutation so other project
- * fields stay untouched.
+ * Project-level site-amenity editor: parcel boundary, access points,
+ * parking lot, and yard / outside storage. Mounted on the project edit
+ * page; calls the narrowly-scoped project.updateAmenities mutation so
+ * other project fields stay untouched.
+ *
+ * Parking + yard sections render inside <details> so their FootprintEditors
+ * (each one mounts a Mapbox GL instance) only spin up on demand. The
+ * parcel editor stays expanded by default since it's the most-used.
  */
 export function ProjectAmenitiesPanel({
   projectId,
   center,
   initialParcel,
   initialAccessPoints,
+  initialParkingPolygon,
+  initialParkingStalls,
+  initialParkingKind,
+  initialYardPolygon,
 }: Props) {
   const utils = api.useUtils();
   const [parcel, setParcel] = useState<Polygon | null>(() =>
@@ -46,6 +61,18 @@ export function ProjectAmenitiesPanel({
   );
   const [points, setPoints] = useState<AccessPoint[]>(() =>
     parseAccessPoints(initialAccessPoints),
+  );
+  const [parkingPolygon, setParkingPolygon] = useState<Polygon | null>(() =>
+    parseParcelPolygon(initialParkingPolygon),
+  );
+  const [parkingStalls, setParkingStalls] = useState<string>(
+    initialParkingStalls != null ? String(initialParkingStalls) : "",
+  );
+  const [parkingKind, setParkingKind] = useState<ParkingKind>(
+    parseParkingKind(initialParkingKind) ?? "car",
+  );
+  const [yardPolygon, setYardPolygon] = useState<Polygon | null>(() =>
+    parseParcelPolygon(initialYardPolygon),
   );
 
   // Re-hydrate when the initial inputs land asynchronously (project query).
@@ -55,6 +82,20 @@ export function ProjectAmenitiesPanel({
   useEffect(() => {
     setPoints(parseAccessPoints(initialAccessPoints));
   }, [initialAccessPoints]);
+  useEffect(() => {
+    setParkingPolygon(parseParcelPolygon(initialParkingPolygon));
+  }, [initialParkingPolygon]);
+  useEffect(() => {
+    setParkingStalls(
+      initialParkingStalls != null ? String(initialParkingStalls) : "",
+    );
+  }, [initialParkingStalls]);
+  useEffect(() => {
+    setParkingKind(parseParkingKind(initialParkingKind) ?? "car");
+  }, [initialParkingKind]);
+  useEffect(() => {
+    setYardPolygon(parseParcelPolygon(initialYardPolygon));
+  }, [initialYardPolygon]);
 
   const update = api.project.updateAmenities.useMutation({
     onSuccess: async () => {
@@ -65,10 +106,18 @@ export function ProjectAmenitiesPanel({
   });
 
   function handleSave() {
+    const stallsNum = parkingStalls.trim() === "" ? null : Number(parkingStalls);
     update.mutate({
       id: projectId,
       parcelPolygon: parcel,
       accessPoints: points,
+      parkingPolygon,
+      parkingStalls:
+        stallsNum != null && Number.isFinite(stallsNum) && stallsNum >= 0
+          ? Math.round(stallsNum)
+          : null,
+      parkingKind: parkingPolygon ? parkingKind : null,
+      yardPolygon,
     });
   }
 
@@ -92,11 +141,32 @@ export function ProjectAmenitiesPanel({
   const hasChanges = useMemo(() => {
     const initialP = parseParcelPolygon(initialParcel);
     const initialA = parseAccessPoints(initialAccessPoints);
+    const initialPark = parseParcelPolygon(initialParkingPolygon);
+    const initialKind = parseParkingKind(initialParkingKind) ?? "car";
+    const initialYard = parseParcelPolygon(initialYardPolygon);
+    const stallsNow = parkingStalls.trim() === "" ? null : Number(parkingStalls);
     return (
       JSON.stringify(initialP) !== JSON.stringify(parcel) ||
-      JSON.stringify(initialA) !== JSON.stringify(points)
+      JSON.stringify(initialA) !== JSON.stringify(points) ||
+      JSON.stringify(initialPark) !== JSON.stringify(parkingPolygon) ||
+      (initialParkingStalls ?? null) !== stallsNow ||
+      initialKind !== parkingKind ||
+      JSON.stringify(initialYard) !== JSON.stringify(yardPolygon)
     );
-  }, [initialParcel, initialAccessPoints, parcel, points]);
+  }, [
+    initialParcel,
+    initialAccessPoints,
+    initialParkingPolygon,
+    initialParkingStalls,
+    initialParkingKind,
+    initialYardPolygon,
+    parcel,
+    points,
+    parkingPolygon,
+    parkingStalls,
+    parkingKind,
+    yardPolygon,
+  ]);
 
   return (
     <section className="rounded-md border border-neutral-200 bg-white p-4">
@@ -104,7 +174,7 @@ export function ProjectAmenitiesPanel({
         <div>
           <h2 className="text-sm font-semibold">Site amenities</h2>
           <p className="text-[11px] text-neutral-500">
-            Parcel boundary + ingress/egress access points
+            Parcel · access · parking · yard
           </p>
         </div>
         <button
@@ -226,6 +296,88 @@ export function ProjectAmenitiesPanel({
           )}
         </div>
       </div>
+
+      <details className="mt-4 rounded-md border border-neutral-200 bg-neutral-50">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+          Parking lot
+          {parkingPolygon && (
+            <span className="ml-2 text-[11px] font-normal text-neutral-500">
+              · {parkingStalls || "—"} stalls · {parkingKind}
+            </span>
+          )}
+        </summary>
+        <div className="border-t border-neutral-200 p-3">
+          <p className="mb-2 text-[11px] text-neutral-500">
+            Trace the parking lot polygon. Stall count drives the
+            cars-per-1,000-SF ratio on the dashboard.
+          </p>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_1fr]">
+            <div className="h-64 w-full overflow-hidden rounded-md border border-neutral-200">
+              <FootprintEditor
+                center={center}
+                value={parkingPolygon}
+                onChange={setParkingPolygon}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+                  Stalls
+                </span>
+                <input
+                  value={parkingStalls}
+                  onChange={(e) => setParkingStalls(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="e.g. 250"
+                  className="rounded-md border border-neutral-300 bg-white px-2 py-1"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+                  Kind
+                </span>
+                <select
+                  value={parkingKind}
+                  onChange={(e) =>
+                    setParkingKind(e.target.value as ParkingKind)
+                  }
+                  className="rounded-md border border-neutral-300 bg-white px-2 py-1 capitalize"
+                >
+                  {PARKING_KIND_OPTIONS.map((k) => (
+                    <option key={k} value={k} className="capitalize">
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details className="mt-3 rounded-md border border-neutral-200 bg-neutral-50">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+          Yard / outside storage
+          {yardPolygon && (
+            <span className="ml-2 text-[11px] font-normal text-neutral-500">
+              · configured
+            </span>
+          )}
+        </summary>
+        <div className="border-t border-neutral-200 p-3">
+          <p className="mb-2 text-[11px] text-neutral-500">
+            Trace the fenced exterior storage area. Premium for trucking and
+            equipment-rental tenants.
+          </p>
+          <div className="h-64 w-full overflow-hidden rounded-md border border-neutral-200">
+            <FootprintEditor
+              center={center}
+              value={yardPolygon}
+              onChange={setYardPolygon}
+            />
+          </div>
+        </div>
+      </details>
     </section>
   );
 }
