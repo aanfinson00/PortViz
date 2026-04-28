@@ -23,7 +23,10 @@ export default function NewBuildingPage({
   const utils = api.useUtils();
   const create = api.building.create.useMutation({
     onSuccess: async (b) => {
-      await utils.building.listByProject.invalidate();
+      await Promise.all([
+        utils.building.listByProject.invalidate(),
+        utils.building.listForMap.invalidate(),
+      ]);
       toastSuccess(`Created building ${projectCode.toUpperCase()}-${b.code}`);
       router.push(`/app/projects/${projectCode.toUpperCase()}/buildings/${b.code}`);
     },

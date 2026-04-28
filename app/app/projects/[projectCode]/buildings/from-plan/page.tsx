@@ -29,7 +29,10 @@ export default function FromPlanWizardPage({
   const utils = api.useUtils();
   const create = api.building.create.useMutation({
     onSuccess: async (b) => {
-      await utils.building.listByProject.invalidate();
+      await Promise.all([
+        utils.building.listByProject.invalidate(),
+        utils.building.listForMap.invalidate(),
+      ]);
       router.push(`/app/projects/${projectCode.toUpperCase()}/buildings/${b.code}`);
     },
   });

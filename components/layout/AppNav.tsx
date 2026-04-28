@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useShortcutLabel } from "@/components/layout/useShortcutLabel";
 import { createClient } from "@/lib/supabase/client";
 
 const LINKS = [
@@ -13,6 +14,7 @@ const LINKS = [
 export function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const shortcut = useShortcutLabel("K");
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -40,7 +42,7 @@ export function AppNav() {
         );
       })}
       <span className="ml-2 hidden items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-mono text-[11px] text-neutral-500 md:inline-flex">
-        ⌘K to search
+        {shortcut} to search
       </span>
       <button
         onClick={handleSignOut}

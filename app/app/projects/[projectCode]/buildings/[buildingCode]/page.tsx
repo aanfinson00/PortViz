@@ -15,6 +15,7 @@ import {
   type BuildingGeom,
 } from "@/components/map/BuildingExtrusionMap";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { AmenitiesPanel } from "@/components/property/amenities/AmenitiesPanel";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide, SpaceGroup } from "@/lib/demising";
 import { splitFootprintIntoBays } from "@/lib/geometry";
@@ -42,7 +43,10 @@ export default function BuildingDetailPage({
   const utils = api.useUtils();
   const remove = api.building.delete.useMutation({
     onSuccess: async () => {
-      await utils.building.listByProject.invalidate();
+      await Promise.all([
+        utils.building.listByProject.invalidate(),
+        utils.building.listForMap.invalidate(),
+      ]);
       toastSuccess("Building deleted");
       router.push(`/app/projects/${projectCode.toUpperCase()}`);
       router.refresh();
@@ -302,6 +306,15 @@ export default function BuildingDetailPage({
                 value={building.year_built ?? "—"}
               />
             </dl>
+
+            <div className="mt-6">
+              <AmenitiesPanel
+                buildingId={building.id}
+                initialTruckCourtDepthFt={
+                  building.truck_court_depth_ft ?? null
+                }
+              />
+            </div>
           </aside>
 
           <div className="flex flex-col overflow-hidden">

@@ -1,11 +1,17 @@
 "use client";
 
 import type { Polygon } from "geojson";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BuildingExtrusionMap,
   type BuildingGeom,
 } from "@/components/map/BuildingExtrusionMap";
+import { AmenitiesLegend } from "@/components/property/amenities/AmenitiesLegend";
+import {
+  buildAmenityLayers,
+  type AmenityBuilding,
+  type AmenityToggles,
+} from "@/components/property/amenities/buildAmenityLayers";
 
 interface PropertyHeroProps {
   buildings: Array<{
@@ -16,6 +22,12 @@ interface PropertyHeroProps {
     heightFt: number | null;
   }>;
   fallbackCenter?: [number, number] | null;
+  /**
+   * Optional amenity inputs (bays per building + truck-court depth). When
+   * provided, the hero composes a "Site amenities" overlay with toggles in
+   * a small legend. Omit to render the plain 3D view.
+   */
+  amenities?: AmenityBuilding[];
 }
 
 /**
@@ -23,7 +35,19 @@ interface PropertyHeroProps {
  * the project's buildings (with footprints) as fill-extrusions on Mapbox.
  * Falls back to a static placeholder when there are no footprints to show.
  */
-export function PropertyHero({ buildings, fallbackCenter }: PropertyHeroProps) {
+export function PropertyHero({
+  buildings,
+  fallbackCenter,
+  amenities,
+}: PropertyHeroProps) {
+  const [toggles, setToggles] = useState<AmenityToggles>({
+    docks: true,
+    truckCourts: true,
+  });
+  const overlayLayers = useMemo(
+    () => (amenities ? buildAmenityLayers(amenities, toggles) : undefined),
+    [amenities, toggles],
+  );
   const mapBuildings: BuildingGeom[] = useMemo(
     () =>
       buildings.flatMap((b) => {
@@ -83,12 +107,16 @@ export function PropertyHero({ buildings, fallbackCenter }: PropertyHeroProps) {
   }
 
   return (
-    <div className="h-72 w-full overflow-hidden rounded-md border border-neutral-200">
+    <div className="relative h-72 w-full overflow-hidden rounded-md border border-neutral-200">
       <BuildingExtrusionMap
         center={center}
         buildings={mapBuildings}
         bounds={bounds}
+        overlayLayers={overlayLayers}
       />
+      {amenities && amenities.length > 0 && (
+        <AmenitiesLegend toggles={toggles} onChange={setToggles} />
+      )}
     </div>
   );
 }

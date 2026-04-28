@@ -27,6 +27,7 @@ type MapBuildingRow = {
   name: string | null;
   footprint_geojson: Polygon | null;
   height_ft: number | null;
+  truck_court_depth_ft: number | null;
   bay: Array<{
     id: string;
     ordinal: number;
@@ -112,6 +113,27 @@ export default function ProjectDetailPage({
       name: b.name,
       footprint: b.footprint_geojson,
       heightFt: b.height_ft ? Number(b.height_ft) : null,
+    }));
+  }, [buildingsQuery.data]);
+
+  // Site-amenity inputs for the hero overlay (docks + drive-ins + truck
+  // courts). Each building maps its bays + truck_court_depth_ft into the
+  // shape buildAmenityLayers expects. Pure shape transform — no fetch.
+  const heroAmenities = useMemo(() => {
+    return ((buildingsQuery.data ?? []) as MapBuildingRow[]).map((b) => ({
+      id: b.id,
+      footprint: b.footprint_geojson,
+      truckCourtDepthFt: b.truck_court_depth_ft,
+      bays: b.bay.map((x) => ({
+        id: x.id,
+        ordinal: x.ordinal,
+        widthFt: Number(x.width_ft),
+        depthFt: Number(x.depth_ft),
+        dockDoorCount: x.dock_door_count,
+        driveInCount: x.drive_in_count,
+        hasYardAccess: x.has_yard_access,
+        frontageSide: x.frontage_side as FrontageSide,
+      })),
     }));
   }, [buildingsQuery.data]);
 
@@ -291,6 +313,34 @@ export default function ProjectDetailPage({
         </p>
       )}
 
+      {/* Surface secondary-query errors so silent failures (e.g. a missing
+          migration breaking listForMap) don't show up as a blank dashboard. */}
+      {(buildingsQuery.isError ||
+        buildingsListQuery.isError ||
+        leasesQuery.isError) && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">Some property data couldn&rsquo;t load.</p>
+          <ul className="mt-1 list-disc pl-5 text-xs">
+            {buildingsQuery.isError && (
+              <li>
+                Buildings (with bays + spaces): {buildingsQuery.error.message}
+              </li>
+            )}
+            {buildingsListQuery.isError && (
+              <li>Buildings (summary): {buildingsListQuery.error.message}</li>
+            )}
+            {leasesQuery.isError && (
+              <li>Active leases: {leasesQuery.error.message}</li>
+            )}
+          </ul>
+          <p className="mt-2 text-xs">
+            If you recently pulled changes, apply pending Supabase migrations
+            (e.g. <code>supabase/migrations/0005_*</code>,{" "}
+            <code>0006_*</code>) and reload.
+          </p>
+        </div>
+      )}
+
       {project.data === null && (
         <p className="text-sm text-neutral-500">
           No project with code{" "}
@@ -355,6 +405,7 @@ export default function ProjectDetailPage({
           <PropertyHero
             buildings={heroBuildings}
             fallbackCenter={fallbackCenter}
+            amenities={heroAmenities}
           />
 
           {/* Headline KPIs */}
