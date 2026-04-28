@@ -1,6 +1,13 @@
 import type { Polygon } from "geojson";
 import { describe, expect, it } from "vitest";
-import { lightenColor, splitOfficeWarehouse } from "./officeBuildout";
+import {
+  lightenColor,
+  parseOfficeCorner,
+  placeCornerOffice,
+  splitOfficeWarehouse,
+  squarestOfficeDimensions,
+  type OfficeCorner,
+} from "./officeBuildout";
 import { polygonAreaSqFt } from "./polygonArea";
 
 // A 3,000 ft (E-W) × 1,000 ft (N-S) slab anchored near Dallas. We use a
@@ -72,6 +79,189 @@ describe("splitOfficeWarehouse", () => {
     expect(out.warehouse).toBeNull();
     expect(out.officeSf).toBeCloseTo(total, 0);
     expect(out.warehouseSf).toBe(0);
+  });
+});
+
+describe("squarestOfficeDimensions", () => {
+  it("returns a square when target SF fits comfortably in the slab", () => {
+    // 2,500 SF in a 200×200 slab → ~50×50 ideal.
+    const out = squarestOfficeDimensions(200, 200, 2_500);
+    expect(out.widthFt).toBeCloseTo(50, 0);
+    expect(out.depthFt).toBeCloseTo(50, 0);
+  });
+
+  it("clamps width to slab frontage when sqrt(SF) > frontage", () => {
+    // 10,000 SF, slab 50ft frontage × 500ft depth. sqrt = 100 > 50.
+    // → width = 50, depth = 200.
+    const out = squarestOfficeDimensions(50, 500, 10_000);
+    expect(out.widthFt).toBeCloseTo(50, 0);
+    expect(out.depthFt).toBeCloseTo(200, 0);
+  });
+
+  it("clamps depth to slab depth when sqrt(SF) > depth", () => {
+    // 10,000 SF, slab 500ft frontage × 50ft depth.
+    // → depth = 50, width = 200.
+    const out = squarestOfficeDimensions(500, 50, 10_000);
+    expect(out.depthFt).toBeCloseTo(50, 0);
+    expect(out.widthFt).toBeCloseTo(200, 0);
+  });
+
+  it("caps both dimensions at slab dims when SF exceeds slab area", () => {
+    // 100,000 SF target on a 100×100 (10k SF) slab → output is the slab
+    // dims themselves; caller treats this as 'whole slab is office'.
+    const out = squarestOfficeDimensions(100, 100, 100_000);
+    expect(out.widthFt).toBeCloseTo(100, 0);
+    expect(out.depthFt).toBeCloseTo(100, 0);
+  });
+
+  it("returns zeros for zero / negative SF or zero slab", () => {
+    expect(squarestOfficeDimensions(100, 100, 0)).toEqual({ widthFt: 0, depthFt: 0 });
+    expect(squarestOfficeDimensions(100, 100, -50)).toEqual({ widthFt: 0, depthFt: 0 });
+    expect(squarestOfficeDimensions(0, 100, 1_000)).toEqual({ widthFt: 0, depthFt: 0 });
+  });
+});
+
+describe("parseOfficeCorner", () => {
+  it("accepts the four valid corners", () => {
+    expect(parseOfficeCorner("front-left")).toBe("front-left");
+    expect(parseOfficeCorner("front-right")).toBe("front-right");
+    expect(parseOfficeCorner("rear-left")).toBe("rear-left");
+    expect(parseOfficeCorner("rear-right")).toBe("rear-right");
+  });
+
+  it("returns null for unknown values", () => {
+    expect(parseOfficeCorner("center")).toBeNull();
+    expect(parseOfficeCorner(null)).toBeNull();
+    expect(parseOfficeCorner(undefined)).toBeNull();
+    expect(parseOfficeCorner(42)).toBeNull();
+  });
+});
+
+describe("placeCornerOffice", () => {
+  it("returns no office when officeSf is null/zero/negative", () => {
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: null,
+      corner: "front-left",
+    });
+    expect(out.office).toBeNull();
+    expect(out.warehouseParts).toHaveLength(1);
+  });
+
+  it("front-left office on S frontage sits at the SW corner", () => {
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: 100_000,
+      corner: "front-left",
+    });
+    expect(out.office).not.toBeNull();
+    const ring = out.office!.coordinates[0]!;
+    const minLng = Math.min(...ring.map((p) => p[0]!));
+    const minLat = Math.min(...ring.map((p) => p[1]!));
+    // SW corner: minLng + minLat should match the slab's SW.
+    expect(minLng).toBeCloseTo(-96.8, 5);
+    expect(minLat).toBeCloseTo(32.78, 5);
+  });
+
+  it("front-right office on S frontage sits at the SE corner", () => {
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: 100_000,
+      corner: "front-right",
+    });
+    const ring = out.office!.coordinates[0]!;
+    const maxLng = Math.max(...ring.map((p) => p[0]!));
+    const minLat = Math.min(...ring.map((p) => p[1]!));
+    expect(maxLng).toBeCloseTo(-96.79, 5);
+    expect(minLat).toBeCloseTo(32.78, 5);
+  });
+
+  it("rear-left office on S frontage sits at the NW corner", () => {
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: 100_000,
+      corner: "rear-left",
+    });
+    const ring = out.office!.coordinates[0]!;
+    const minLng = Math.min(...ring.map((p) => p[0]!));
+    const maxLat = Math.max(...ring.map((p) => p[1]!));
+    expect(minLng).toBeCloseTo(-96.8, 5);
+    expect(maxLat).toBeCloseTo(32.785, 5);
+  });
+
+  it("rear-right office on S frontage sits at the NE corner", () => {
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: 100_000,
+      corner: "rear-right",
+    });
+    const ring = out.office!.coordinates[0]!;
+    const maxLng = Math.max(...ring.map((p) => p[0]!));
+    const maxLat = Math.max(...ring.map((p) => p[1]!));
+    expect(maxLng).toBeCloseTo(-96.79, 5);
+    expect(maxLat).toBeCloseTo(32.785, 5);
+  });
+
+  it("office area lands within ~10% of the requested SF on a rectangular slab", () => {
+    const target = 50_000;
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: target,
+      corner: "front-left",
+    });
+    // Slab is roughly 0.01° × 0.005°. Allow some tolerance because the
+    // dimension math uses cosine-corrected ft <-> deg.
+    expect(out.officeSf).toBeGreaterThan(target * 0.85);
+    expect(out.officeSf).toBeLessThan(target * 1.15);
+  });
+
+  it("warehouse parts are non-empty when there's room beyond the office", () => {
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: 50_000,
+      corner: "front-left",
+    });
+    expect(out.warehouseParts.length).toBeGreaterThan(0);
+    expect(out.warehouseSf).toBeGreaterThan(0);
+  });
+
+  it("when officeSf >= slab area, the entire slab becomes office", () => {
+    const total = polygonAreaSqFt(SLAB);
+    const out = placeCornerOffice({
+      slab: SLAB,
+      side: "S",
+      officeSf: total + 1_000_000,
+      corner: "front-left",
+    });
+    expect(out.warehouseParts).toEqual([]);
+    expect(out.officeSf).toBeCloseTo(total, 0);
+    expect(out.warehouseSf).toBe(0);
+  });
+
+  it("preserves total area: office + warehouse SF ≈ slab SF", () => {
+    const total = polygonAreaSqFt(SLAB);
+    const corners: OfficeCorner[] = [
+      "front-left",
+      "front-right",
+      "rear-left",
+      "rear-right",
+    ];
+    for (const corner of corners) {
+      const out = placeCornerOffice({
+        slab: SLAB,
+        side: "S",
+        officeSf: 80_000,
+        corner,
+      });
+      expect(out.officeSf + out.warehouseSf).toBeCloseTo(total, 0);
+    }
   });
 });
 

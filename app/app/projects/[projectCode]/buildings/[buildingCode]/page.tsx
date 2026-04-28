@@ -29,7 +29,8 @@ import {
 } from "@/lib/footprintSlicer";
 import {
   lightenColor,
-  splitOfficeWarehouse,
+  placeCornerOffice,
+  type OfficeCorner,
 } from "@/lib/officeBuildout";
 import { polygonAreaSqFt } from "@/lib/polygonArea";
 import { resolveSpaces } from "@/lib/sliderDemising";
@@ -206,7 +207,12 @@ export default function BuildingDetailPage({
     sliderResolved.forEach((r, i) => {
       const slab = sliderSlabs[i];
       if (!slab) return;
-      const split = splitOfficeWarehouse(slab, sliderFrontage, r.officeDepthFt);
+      const split = placeCornerOffice({
+        slab,
+        side: sliderFrontage,
+        officeSf: r.officeSf ?? null,
+        corner: r.officeCorner ?? "front-left",
+      });
       out[r.id] = {
         officeSf: split.officeSf,
         warehouseSf: split.warehouseSf,
@@ -220,29 +226,33 @@ export default function BuildingDetailPage({
     const heightFt = building.height_ft ? Number(building.height_ft) : null;
 
     // Slider mode: slice the footprint by the current resolved space SFs
-    // (live, even before save). Each space splits into a warehouse extrusion
-    // (rear) plus an optional office extrusion (front strip) when
-    // office_depth_ft is set.
+    // (live, even before save). Each space splits into warehouse parts
+    // (the L-shape complement of the office) plus an optional office
+    // extrusion anchored to the chosen corner. When officeSf is null /
+    // 0, the slab is rendered as a single warehouse extrusion.
     if (demisingMode === "sliders" && sliderResolved.length > 0) {
       const out: BuildingGeom[] = [];
       sliderResolved.forEach((r, i) => {
         const slab = sliderSlabs[i] ?? footprint;
-        const split = splitOfficeWarehouse(
+        const split = placeCornerOffice({
           slab,
-          sliderFrontage,
-          r.officeDepthFt,
-        );
+          side: sliderFrontage,
+          officeSf: r.officeSf ?? null,
+          corner: (r.officeCorner ?? "front-left") as OfficeCorner,
+        });
         const baseColor = spaceColor(i);
-        if (split.warehouse) {
+        // Warehouse parts: 0..2 axis-aligned rectangles tiling the slab
+        // minus the office bbox.
+        split.warehouseParts.forEach((part, partIdx) => {
           out.push({
-            id: `slab-${r.id}-wh`,
-            code: `${i}-wh`,
+            id: `slab-${r.id}-wh-${partIdx}`,
+            code: `${i}-wh-${partIdx}`,
             name: `Space ${i + 1} (warehouse)`,
-            footprint: split.warehouse,
+            footprint: part,
             heightFt,
             color: baseColor,
           });
-        }
+        });
         if (split.office) {
           out.push({
             id: `slab-${r.id}-of`,
@@ -423,14 +433,16 @@ export default function BuildingDetailPage({
                       position_order: number | null;
                       target_sf: number | null;
                       is_pinned: boolean | null;
-                      office_depth_ft: number | null;
+                      office_sf: number | null;
+                      office_corner: string | null;
                     }) => ({
                       id: s.id,
                       code: s.code,
                       position_order: s.position_order,
                       target_sf: s.target_sf,
                       is_pinned: s.is_pinned,
-                      office_depth_ft: s.office_depth_ft,
+                      office_sf: s.office_sf,
+                      office_corner: s.office_corner,
                     }),
                   )}
                   onChange={handleSliderChange}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { spaceColor } from "@/components/demising/DemisingEditor";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { nextSpaceCode } from "@/lib/codes";
+import { type OfficeCorner } from "@/lib/officeBuildout";
 import {
   dragWall,
   removeSpace,
@@ -19,16 +20,32 @@ interface DbSpace {
   position_order: number | null;
   target_sf: number | null;
   is_pinned: boolean | null;
-  office_depth_ft: number | null;
+  office_sf: number | null;
+  office_corner: string | null;
 }
 
 /**
- * Slider space + the office depth, threaded together so the parent page
- * can render the office vs warehouse extrusions in real time.
+ * Slider space + corner-office target, threaded together so the parent
+ * page can render the office vs warehouse extrusions in real time.
  */
 export interface EditableSpace extends SliderSpace {
-  officeDepthFt: number | null;
+  officeSf: number | null;
+  officeCorner: OfficeCorner;
 }
+
+const CORNER_OPTIONS: OfficeCorner[] = [
+  "front-left",
+  "front-right",
+  "rear-left",
+  "rear-right",
+];
+
+const CORNER_LABELS: Record<OfficeCorner, string> = {
+  "front-left": "Front-left",
+  "front-right": "Front-right",
+  "rear-left": "Rear-left",
+  "rear-right": "Rear-right",
+};
 
 interface SliderDemisingEditorProps {
   buildingId: string;
@@ -81,7 +98,9 @@ export function SliderDemisingEditor({
           positionOrder: s.position_order ?? i,
           isPinned: s.is_pinned ?? false,
           targetSf: s.target_sf,
-          officeDepthFt: s.office_depth_ft,
+          officeSf: s.office_sf,
+          officeCorner:
+            (s.office_corner as OfficeCorner | null) ?? "front-left",
         }))
         .sort((a, b) => a.positionOrder - b.positionOrder),
     [initialSpaces],
@@ -148,7 +167,10 @@ export function SliderDemisingEditor({
   function handleAddSpace() {
     setSpaces((prev) => {
       const newId = `${TEMP_PREFIX}${++tempCounterRef.current}`;
-      const next = splitLargest(prev, totalSf, newId, { officeDepthFt: null });
+      const next = splitLargest(prev, totalSf, newId, {
+        officeSf: null,
+        officeCorner: "front-left" as OfficeCorner,
+      });
       // Coin a new code for the new space — pick the next free numeric
       // suffix from the existing codes pool.
       const usedCodes = new Set(Object.values(codes));
@@ -158,7 +180,7 @@ export function SliderDemisingEditor({
     });
   }
 
-  function handleOfficeDepthChange(id: string, value: string) {
+  function handleOfficeSfChange(id: string, value: string) {
     const n =
       value.trim() === ""
         ? null
@@ -166,7 +188,13 @@ export function SliderDemisingEditor({
           ? Math.max(0, Math.round(Number(value)))
           : null;
     setSpaces((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, officeDepthFt: n } : s)),
+      prev.map((s) => (s.id === id ? { ...s, officeSf: n } : s)),
+    );
+  }
+
+  function handleOfficeCornerChange(id: string, corner: OfficeCorner) {
+    setSpaces((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, officeCorner: corner } : s)),
     );
   }
 
@@ -221,7 +249,8 @@ export function SliderDemisingEditor({
         positionOrder: i,
         targetSf: s.isPinned ? s.targetSf : s.targetSf,
         isPinned: s.isPinned,
-        officeDepthFt: s.officeDepthFt ?? null,
+        officeSf: s.officeSf ?? null,
+        officeCorner: s.officeSf ? s.officeCorner : null,
       })),
     });
   }
@@ -354,20 +383,39 @@ export function SliderDemisingEditor({
                 {isExpanded && (
                   <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 pl-5 pt-1.5 text-[11px] text-neutral-600">
                     <label className="flex items-center gap-1">
-                      <span className="text-neutral-500">Office depth</span>
+                      <span className="text-neutral-500">Office SF</span>
                       <input
                         type="number"
                         inputMode="numeric"
                         placeholder="0"
-                        value={r.officeDepthFt ?? ""}
+                        value={r.officeSf ?? ""}
                         onChange={(e) =>
-                          handleOfficeDepthChange(r.id, e.target.value)
+                          handleOfficeSfChange(r.id, e.target.value)
                         }
-                        className="w-16 rounded border border-neutral-200 px-1.5 py-0.5 font-mono"
+                        className="w-20 rounded border border-neutral-200 px-1.5 py-0.5 font-mono"
                       />
-                      <span className="text-neutral-500">ft</span>
                     </label>
-                    {r.officeDepthFt && r.officeDepthFt > 0 ? (
+                    <label className="flex items-center gap-1">
+                      <span className="text-neutral-500">Corner</span>
+                      <select
+                        value={r.officeCorner}
+                        onChange={(e) =>
+                          handleOfficeCornerChange(
+                            r.id,
+                            e.target.value as OfficeCorner,
+                          )
+                        }
+                        disabled={!r.officeSf || r.officeSf <= 0}
+                        className="rounded border border-neutral-200 px-1 py-0.5"
+                      >
+                        {CORNER_OPTIONS.map((c) => (
+                          <option key={c} value={c}>
+                            {CORNER_LABELS[c]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {r.officeSf && r.officeSf > 0 ? (
                       <span className="text-neutral-500">
                         →{" "}
                         <span className="font-medium text-neutral-800">
@@ -378,6 +426,9 @@ export function SliderDemisingEditor({
                           {Math.round(warehouseSf).toLocaleString()}
                         </span>{" "}
                         warehouse
+                        <span className="ml-1 text-neutral-400">
+                          (squarest fit, anchored to {CORNER_LABELS[r.officeCorner].toLowerCase()})
+                        </span>
                       </span>
                     ) : (
                       <span className="text-neutral-400">
