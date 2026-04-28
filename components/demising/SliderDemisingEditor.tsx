@@ -63,6 +63,14 @@ interface SliderDemisingEditorProps {
    * read-only readouts next to the office-depth input.
    */
   officeBreakdown?: Record<string, { officeSf: number; warehouseSf: number }>;
+  /**
+   * Cumulative bay-boundary fractions (0–1) along the building's frontage,
+   * used to render structural column-grid markers on the slider bar so
+   * users can see how their demising aligns with the column grid. The
+   * first and last entries (0 and 1) are implicit — pass interior
+   * boundaries only.
+   */
+  columnGridFractions?: number[];
 }
 
 const TEMP_PREFIX = "new:";
@@ -86,6 +94,7 @@ export function SliderDemisingEditor({
   initialSpaces,
   onChange,
   officeBreakdown,
+  columnGridFractions,
 }: SliderDemisingEditorProps) {
   const utils = api.useUtils();
   const tempCounterRef = useRef(0);
@@ -294,6 +303,7 @@ export function SliderDemisingEditor({
       <SliderBar
         resolved={resolved}
         totalSf={totalSf}
+        columnGridFractions={columnGridFractions}
         onWallDrag={(wallIndex, deltaSf) =>
           setSpaces((prev) => dragWall(prev, wallIndex, deltaSf, totalSf))
         }
@@ -414,6 +424,11 @@ export function SliderDemisingEditor({
                           </option>
                         ))}
                       </select>
+                      <CornerPreview
+                        corner={r.officeCorner}
+                        active={!!(r.officeSf && r.officeSf > 0)}
+                        color={spaceColor(i)}
+                      />
                     </label>
                     {r.officeSf && r.officeSf > 0 ? (
                       <span className="text-neutral-500">
@@ -450,14 +465,25 @@ interface SliderBarProps {
   resolved: ReturnType<typeof resolveSpaces>;
   totalSf: number;
   onWallDrag: (wallIndex: number, deltaSf: number) => void;
+  columnGridFractions?: number[];
 }
 
 /**
  * Horizontal bar visualization of the demising. Each space is a colored
  * segment proportional to its SF; walls between segments are draggable
  * handles (pointer events). Width is responsive.
+ *
+ * The bay-grid markers (vertical lines at each column-bay boundary along
+ * the frontage) render behind the segments as faint guides — gives the
+ * user visual anchoring for "this wall sits on a column line" without
+ * forcing demising to align with bays.
  */
-function SliderBar({ resolved, totalSf, onWallDrag }: SliderBarProps) {
+function SliderBar({
+  resolved,
+  totalSf,
+  onWallDrag,
+  columnGridFractions = [],
+}: SliderBarProps) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   function handlePointerDown(e: React.PointerEvent, wallIndex: number) {
@@ -490,10 +516,20 @@ function SliderBar({ resolved, totalSf, onWallDrag }: SliderBarProps) {
       ref={ref}
       className="relative h-8 w-full overflow-hidden rounded-md border border-neutral-200 bg-neutral-100"
     >
+      {/* Column-grid markers behind everything; rendered as faint dashed
+          vertical lines so they're visible against any space color. */}
+      {columnGridFractions.map((frac, i) => (
+        <div
+          key={`col-${i}`}
+          aria-hidden
+          className="absolute inset-y-0 z-0 border-l border-dashed border-neutral-400/70"
+          style={{ left: `${frac * 100}%`, width: 0 }}
+        />
+      ))}
       {resolved.map((r, i) => (
         <div
           key={r.id}
-          className="absolute inset-y-0 flex items-center justify-center text-[10px] font-medium text-white/90"
+          className="absolute inset-y-0 z-[1] flex items-center justify-center text-[10px] font-medium text-white/90"
           style={{
             left: `${r.leftWall * 100}%`,
             width: `${(r.rightWall - r.leftWall) * 100}%`,
@@ -530,5 +566,70 @@ function SliderBar({ resolved, totalSf, onWallDrag }: SliderBarProps) {
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Small SVG mock showing where the office will sit inside the space.
+ * The outer rectangle is the slab, the filled rectangle is the office in
+ * the chosen corner. Updates live as the user changes the dropdown.
+ *
+ * Coordinates assume looking outward from the dock face (front = bottom
+ * of the SVG), matching the frontage-relative naming convention.
+ */
+function CornerPreview({
+  corner,
+  active,
+  color,
+}: {
+  corner: OfficeCorner;
+  active: boolean;
+  color: string;
+}) {
+  // Outer slab: full SVG. Office: a third of width × third of height in
+  // the chosen corner.
+  const W = 28;
+  const H = 18;
+  const ow = 11;
+  const oh = 7;
+  const x = corner === "front-left" || corner === "rear-left" ? 0 : W - ow;
+  const y = corner === "front-left" || corner === "front-right" ? H - oh : 0;
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label={`Office at ${corner}`}
+      className="ml-1"
+    >
+      <rect
+        x={0.5}
+        y={0.5}
+        width={W - 1}
+        height={H - 1}
+        fill="none"
+        stroke="#9ca3af"
+        strokeWidth={1}
+      />
+      <rect
+        x={x}
+        y={y}
+        width={ow}
+        height={oh}
+        fill={active ? color : "#d1d5db"}
+        opacity={active ? 0.85 : 0.6}
+      />
+      {/* Frontage indicator: a darker line along the bottom edge to anchor
+          the user — the "front" of the building is always at the bottom. */}
+      <line
+        x1={0}
+        y1={H - 0.5}
+        x2={W}
+        y2={H - 0.5}
+        stroke="#374151"
+        strokeWidth={1.5}
+      />
+    </svg>
   );
 }

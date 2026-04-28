@@ -182,6 +182,23 @@ export default function BuildingDetailPage({
     [bays],
   );
 
+  // Column-grid fractions for the slider bar's structural overlay. Cumulative
+  // bay-width sums normalized to total width; first/last (0 and 1) are
+  // dropped so the SliderBar renders only interior column boundaries.
+  const columnGridFractions = useMemo<number[]>(() => {
+    if (bays.length === 0) return [];
+    const sorted = [...bays].sort((a, b) => a.ordinal - b.ordinal);
+    const total = sorted.reduce((acc, b) => acc + b.widthFt, 0);
+    if (total <= 0) return [];
+    const out: number[] = [];
+    let cum = 0;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      cum += sorted[i]!.widthFt;
+      out.push(cum / total);
+    }
+    return out;
+  }, [bays]);
+
   // Slice each space's slab into office (front strip) + warehouse (rest)
   // based on the per-space office_depth_ft. This drives both the 3D map
   // (one extrusion per zone) and the editor's per-row SF readout.
@@ -254,12 +271,21 @@ export default function BuildingDetailPage({
           });
         });
         if (split.office) {
+          // Offices typically have a suspended ceiling around 12-16 ft
+          // even when the warehouse clear height is 30+ ft. Render the
+          // office at a lower height to surface that distinction in 3D.
+          // Floor at 14 ft so it reads as office regardless of building
+          // height; falls back to the building height when smaller.
+          const buildingHeight = building.height_ft
+            ? Number(building.height_ft)
+            : null;
+          const officeHeight = Math.min(14, buildingHeight ?? 14);
           out.push({
             id: `slab-${r.id}-of`,
             code: `${i}-of`,
             name: `Space ${i + 1} (office)`,
             footprint: split.office,
-            heightFt,
+            heightFt: officeHeight,
             color: lightenColor(baseColor, 0.5),
           });
         }
@@ -447,6 +473,7 @@ export default function BuildingDetailPage({
                   )}
                   onChange={handleSliderChange}
                   officeBreakdown={sliderOfficeBreakdown}
+                  columnGridFractions={columnGridFractions}
                 />
                 <details className="text-xs text-neutral-500">
                   <summary className="cursor-pointer">
