@@ -166,7 +166,26 @@ export const projectRouter = router({
         .update(patch)
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
-      if (error) throw error;
+      if (error) {
+        // Translate "column does not exist" / schema-cache misses into a
+        // human-actionable message so users see "apply migration X" instead
+        // of raw Postgres jargon.
+        const msg = error.message ?? "";
+        const isMissingColumn =
+          error.code === "42703" ||
+          error.code === "PGRST204" ||
+          error.code === "PGRST116" ||
+          /column .* does not exist/i.test(msg) ||
+          /could not find .* column/i.test(msg) ||
+          /schema cache/i.test(msg);
+        if (isMissingColumn) {
+          throw new Error(
+            "This site-amenity field isn't in your database yet. Apply migrations 0007 (parcel + access points) and 0009 (parking + yard) in the Supabase SQL editor, then try again. Original: " +
+              msg,
+          );
+        }
+        throw error;
+      }
       await logEvent(ctx.supabase, {
         orgId: ctx.orgId,
         actorId: ctx.user.id,

@@ -236,7 +236,23 @@ export const buildingRouter = router({
         .update({ truck_court_depth_ft: input.truckCourtDepthFt })
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
-      if (error) throw error;
+      if (error) {
+        const msg = error.message ?? "";
+        const isMissingColumn =
+          error.code === "42703" ||
+          error.code === "PGRST204" ||
+          error.code === "PGRST116" ||
+          /column .* does not exist/i.test(msg) ||
+          /could not find .* column/i.test(msg) ||
+          /schema cache/i.test(msg);
+        if (isMissingColumn) {
+          throw new Error(
+            "Truck court depth requires migration 0006 in your Supabase. Apply supabase/migrations/0006_truck_court_depth.sql in the SQL editor, then try again. Original: " +
+              msg,
+          );
+        }
+        throw error;
+      }
       await logEvent(ctx.supabase, {
         orgId: ctx.orgId,
         actorId: ctx.user.id,
