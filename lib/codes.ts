@@ -83,3 +83,22 @@ export function parseCompositeId(id: string): ParsedCompositeId {
     spaceCode: parts[2]!,
   };
 }
+
+/**
+ * Coin a fresh space code given the codes already in use within the
+ * building. Picks the lowest unused integer in 100..999 (matches the
+ * 100-floor numbering convention industrial brokers use). Falls back to
+ * "S<n>" if 100..999 are all taken (unlikely in practice).
+ */
+export function nextSpaceCode(usedCodes: string[]): string {
+  const used = new Set(usedCodes.map((c) => c.toUpperCase()));
+  for (let n = 100; n < 1000; n++) {
+    const candidate = String(n);
+    if (!used.has(candidate)) return candidate;
+  }
+  for (let n = 1; n < 1000; n++) {
+    const candidate = `S${n}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return "S";
+}

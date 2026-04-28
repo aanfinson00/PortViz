@@ -1,5 +1,6 @@
 "use client";
 
+import { PARKING_KIND_COLORS, type ParkingKind } from "@/lib/projectAmenities";
 import type { AmenityToggles } from "./buildAmenityLayers";
 import type { ProjectAmenityToggles } from "./buildProjectAmenityLayers";
 
@@ -19,6 +20,8 @@ interface Props {
    * the user see which amenities have been configured at a glance.
    */
   available?: Partial<Record<keyof AllAmenityToggles, boolean>>;
+  /** Color the Parking row's swatch to match the configured kind. */
+  parkingKind?: ParkingKind | null;
 }
 
 /**
@@ -26,7 +29,14 @@ interface Props {
  * the amenity layers off when they're scanning the raw 3D view, without
  * unmounting the layers (which would force re-creation on the map).
  */
-export function AmenitiesLegend({ toggles, onChange, available }: Props) {
+export function AmenitiesLegend({
+  toggles,
+  onChange,
+  available,
+  parkingKind,
+}: Props) {
+  const parkingSwatch =
+    PARKING_KIND_COLORS[parkingKind ?? "car"] ?? "#94a3b8";
   return (
     <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-md border border-neutral-200 bg-white/95 p-2 text-xs shadow-sm backdrop-blur">
       <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
@@ -49,6 +59,22 @@ export function AmenitiesLegend({ toggles, onChange, available }: Props) {
         checked={toggles.accessPoints}
         disabled={available?.accessPoints === false}
         onChange={(v) => onChange({ ...toggles, accessPoints: v })}
+      />
+      <Row
+        label="Parking"
+        swatch={parkingSwatch}
+        swatchOpacity={0.5}
+        checked={toggles.parking}
+        disabled={available?.parking === false}
+        onChange={(v) => onChange({ ...toggles, parking: v })}
+      />
+      <Row
+        label="Yard / storage"
+        swatch="#65a30d"
+        swatchOpacity={0.4}
+        checked={toggles.yard}
+        disabled={available?.yard === false}
+        onChange={(v) => onChange({ ...toggles, yard: v })}
       />
       <Row
         label="Truck courts"

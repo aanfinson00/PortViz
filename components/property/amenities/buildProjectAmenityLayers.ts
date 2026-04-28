@@ -1,8 +1,9 @@
 /**
- * Project-level amenity layers (parcel boundary + access points). Lives
- * alongside buildAmenityLayers (building-level: docks, truck courts) so
- * each amenity stays modular: dropping a layer is a one-line change here
- * and adding a new one doesn't churn the building-side code.
+ * Project-level amenity layers (parcel boundary + access points + parking
+ * lot + yard / outside storage). Lives alongside buildAmenityLayers
+ * (building-level: docks, truck courts) so each amenity stays modular:
+ * dropping a layer is a one-line change here and adding a new one doesn't
+ * churn the building-side code.
  *
  * Like its sibling, this is a pure function — no React, no tRPC. The
  * hero composes its output alongside the building amenity layers.
@@ -13,26 +14,56 @@ import type { OverlayLayer } from "@/components/map/BuildingExtrusionMap";
 import {
   ACCESS_ROLE_COLORS,
   accessPointMarker,
+  PARKING_KIND_COLORS,
   type AccessPoint,
+  type ParkingKind,
 } from "@/lib/projectAmenities";
 
 export interface ProjectAmenityToggles {
   parcel: boolean;
   accessPoints: boolean;
+  parking: boolean;
+  yard: boolean;
+}
+
+export interface ParkingArea {
+  polygon: Polygon;
+  stalls: number | null;
+  kind: ParkingKind | null;
 }
 
 export interface ProjectAmenityInput {
   parcel: Polygon | null;
   accessPoints: AccessPoint[];
+  parking: ParkingArea | null;
+  yard: Polygon | null;
 }
 
 const LAYER_IDS = {
   parcel: "portviz-amenity-parcel",
   accessPoints: "portviz-amenity-access-points",
+  parking: "portviz-amenity-parking",
+  yard: "portviz-amenity-yard",
 } as const;
 
-function emptyFC<T extends "Polygon">(): FeatureCollection<Polygon> {
+function emptyFC(): FeatureCollection<Polygon> {
   return { type: "FeatureCollection", features: [] };
+}
+
+function singletonFC(
+  geometry: Polygon,
+  properties: Record<string, unknown> = {},
+): FeatureCollection<Polygon> {
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry,
+        properties,
+      },
+    ],
+  };
 }
 
 export function buildProjectAmenityLayers(
@@ -40,18 +71,7 @@ export function buildProjectAmenityLayers(
   toggles: ProjectAmenityToggles,
 ): OverlayLayer[] {
   const parcelFC: FeatureCollection<Polygon> =
-    toggles.parcel && input.parcel
-      ? {
-          type: "FeatureCollection",
-          features: [
-            {
-              type: "Feature",
-              geometry: input.parcel,
-              properties: {},
-            },
-          ],
-        }
-      : emptyFC();
+    toggles.parcel && input.parcel ? singletonFC(input.parcel) : emptyFC();
 
   const accessFC: FeatureCollection<Polygon> = toggles.accessPoints
     ? {
@@ -68,6 +88,18 @@ export function buildProjectAmenityLayers(
       }
     : emptyFC();
 
+  const parkingFC: FeatureCollection<Polygon> =
+    toggles.parking && input.parking
+      ? singletonFC(input.parking.polygon, {
+          color: PARKING_KIND_COLORS[input.parking.kind ?? "car"],
+          stalls: input.parking.stalls ?? 0,
+          kind: input.parking.kind ?? "car",
+        })
+      : emptyFC();
+
+  const yardFC: FeatureCollection<Polygon> =
+    toggles.yard && input.yard ? singletonFC(input.yard) : emptyFC();
+
   return [
     {
       // Parcel renders as a dashed outline only — no fill, so it doesn't
@@ -82,6 +114,33 @@ export function buildProjectAmenityLayers(
         "line-width": 2,
         "line-dasharray": [3, 2],
         "line-opacity": 0.85,
+      },
+    },
+    {
+      // Parking lot: filled polygon under the buildings. Color comes from
+      // the per-feature `color` property (driven by parking kind) so a
+      // future multi-polygon setup with mixed kinds will Just Work.
+      id: LAYER_IDS.parking,
+      type: "fill",
+      placement: "below",
+      data: parkingFC,
+      paint: {
+        "fill-color": ["coalesce", ["get", "color"], "#94a3b8"],
+        "fill-opacity": 0.35,
+        "fill-outline-color": "#475569",
+      },
+    },
+    {
+      // Yard / outside storage: solid green-grey tint with a darker
+      // outline. Cross-hatch is a v2 polish (Mapbox needs a sprite image).
+      id: LAYER_IDS.yard,
+      type: "fill",
+      placement: "below",
+      data: yardFC,
+      paint: {
+        "fill-color": "#65a30d",
+        "fill-opacity": 0.18,
+        "fill-outline-color": "#365314",
       },
     },
     {

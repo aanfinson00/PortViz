@@ -3,6 +3,7 @@ import {
   accessPointMarker,
   parseAccessPoints,
   parseParcelPolygon,
+  parseParkingKind,
 } from "./projectAmenities";
 
 describe("accessPointMarker", () => {
@@ -123,5 +124,26 @@ describe("parseParcelPolygon", () => {
     expect(out).not.toBeNull();
     expect(out?.type).toBe("Polygon");
     expect(out?.coordinates[0]).toHaveLength(5);
+  });
+});
+
+describe("parseParkingKind", () => {
+  it("accepts the three valid kinds", () => {
+    expect(parseParkingKind("car")).toBe("car");
+    expect(parseParkingKind("trailer")).toBe("trailer");
+    expect(parseParkingKind("mixed")).toBe("mixed");
+  });
+
+  it("returns null for unknown strings", () => {
+    expect(parseParkingKind("CAR")).toBeNull();
+    expect(parseParkingKind("auto")).toBeNull();
+    expect(parseParkingKind("")).toBeNull();
+  });
+
+  it("returns null for null / undefined / non-string", () => {
+    expect(parseParkingKind(null)).toBeNull();
+    expect(parseParkingKind(undefined)).toBeNull();
+    expect(parseParkingKind(123)).toBeNull();
+    expect(parseParkingKind({ kind: "car" })).toBeNull();
   });
 });

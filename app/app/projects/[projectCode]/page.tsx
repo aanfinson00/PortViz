@@ -28,6 +28,7 @@ import {
 import {
   parseAccessPoints,
   parseParcelPolygon,
+  parseParkingKind,
 } from "@/lib/projectAmenities";
 import { api } from "@/lib/trpc/react";
 
@@ -404,14 +405,29 @@ export default function ProjectDetailPage({
             buildings={heroBuildings}
             fallbackCenter={fallbackCenter}
             amenities={heroAmenities}
-            projectAmenities={{
-              parcel: parseParcelPolygon(
-                (project.data as { parcel_polygon?: unknown }).parcel_polygon,
-              ),
-              accessPoints: parseAccessPoints(
-                (project.data as { access_points?: unknown }).access_points,
-              ),
-            }}
+            projectAmenities={(() => {
+              const p = project.data as {
+                parcel_polygon?: unknown;
+                access_points?: unknown;
+                parking_polygon?: unknown;
+                parking_stalls?: number | null;
+                parking_kind?: unknown;
+                yard_polygon?: unknown;
+              };
+              const parkingPolygon = parseParcelPolygon(p.parking_polygon);
+              return {
+                parcel: parseParcelPolygon(p.parcel_polygon),
+                accessPoints: parseAccessPoints(p.access_points),
+                parking: parkingPolygon
+                  ? {
+                      polygon: parkingPolygon,
+                      stalls: p.parking_stalls ?? null,
+                      kind: parseParkingKind(p.parking_kind),
+                    }
+                  : null,
+                yard: parseParcelPolygon(p.yard_polygon),
+              };
+            })()}
           />
 
           {/* Headline KPIs */}

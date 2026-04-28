@@ -125,6 +125,19 @@ export const projectRouter = router({
         id: z.string().uuid(),
         parcelPolygon: polygonSchema.nullable().optional(),
         accessPoints: z.array(accessPointSchema).max(40).nullable().optional(),
+        parkingPolygon: polygonSchema.nullable().optional(),
+        parkingStalls: z
+          .number()
+          .int()
+          .min(0)
+          .max(100_000)
+          .nullable()
+          .optional(),
+        parkingKind: z
+          .enum(["car", "trailer", "mixed"])
+          .nullable()
+          .optional(),
+        yardPolygon: polygonSchema.nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -135,13 +148,44 @@ export const projectRouter = router({
       if (input.accessPoints !== undefined) {
         patch.access_points = input.accessPoints;
       }
+      if (input.parkingPolygon !== undefined) {
+        patch.parking_polygon = input.parkingPolygon;
+      }
+      if (input.parkingStalls !== undefined) {
+        patch.parking_stalls = input.parkingStalls;
+      }
+      if (input.parkingKind !== undefined) {
+        patch.parking_kind = input.parkingKind;
+      }
+      if (input.yardPolygon !== undefined) {
+        patch.yard_polygon = input.yardPolygon;
+      }
       if (Object.keys(patch).length === 0) return { ok: true };
       const { error } = await ctx.supabase
         .from("project")
         .update(patch)
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
-      if (error) throw error;
+      if (error) {
+        // Translate "column does not exist" / schema-cache misses into a
+        // human-actionable message so users see "apply migration X" instead
+        // of raw Postgres jargon.
+        const msg = error.message ?? "";
+        const isMissingColumn =
+          error.code === "42703" ||
+          error.code === "PGRST204" ||
+          error.code === "PGRST116" ||
+          /column .* does not exist/i.test(msg) ||
+          /could not find .* column/i.test(msg) ||
+          /schema cache/i.test(msg);
+        if (isMissingColumn) {
+          throw new Error(
+            "This site-amenity field isn't in your database yet. Apply migrations 0007 (parcel + access points) and 0009 (parking + yard) in the Supabase SQL editor, then try again. Original: " +
+              msg,
+          );
+        }
+        throw error;
+      }
       await logEvent(ctx.supabase, {
         orgId: ctx.orgId,
         actorId: ctx.user.id,

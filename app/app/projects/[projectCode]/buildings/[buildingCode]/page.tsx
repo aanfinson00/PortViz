@@ -9,15 +9,31 @@ import {
   DemisingEditor,
   spaceColor,
 } from "@/components/demising/DemisingEditor";
+import {
+  SliderDemisingEditor,
+  type EditableSpace,
+} from "@/components/demising/SliderDemisingEditor";
 import { RentRoll } from "@/components/lease/RentRoll";
 import {
   BuildingExtrusionMap,
   type BuildingGeom,
+  type OverlayLayer,
 } from "@/components/map/BuildingExtrusionMap";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { AmenitiesPanel } from "@/components/property/amenities/AmenitiesPanel";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide, SpaceGroup } from "@/lib/demising";
+import {
+  sliceFootprintByArea,
+  type FrontageAxis,
+} from "@/lib/footprintSlicer";
+import {
+  lightenColor,
+  placeCornerOffice,
+  type OfficeCorner,
+} from "@/lib/officeBuildout";
+import { polygonAreaSqFt } from "@/lib/polygonArea";
+import { resolveSpaces } from "@/lib/sliderDemising";
 import { splitFootprintIntoBays } from "@/lib/geometry";
 import { api } from "@/lib/trpc/react";
 
@@ -121,6 +137,22 @@ export default function BuildingDetailPage({
   const handleGroupsChange = useCallback((next: SpaceGroup[]) => {
     setGroups(next);
   }, []);
+  // Live slider-mode preview: SliderDemisingEditor publishes its current
+  // space layout up to here so the building map can render slabs on the
+  // fly while the user is dragging walls (before Save).
+  const [sliderSpaces, setSliderSpaces] = useState<EditableSpace[]>([]);
+  const handleSliderChange = useCallback((next: EditableSpace[]) => {
+    setSliderSpaces(next);
+  }, []);
+  // Toggle for the structural column-grid overlay (bay outlines), shown
+  // when the building has bays defined regardless of demising mode.
+  const [showColumnGrid, setShowColumnGrid] = useState(true);
+
+  const demisingMode: "bays" | "sliders" =
+    ((building as { demising_mode?: string } | undefined)?.demising_mode ===
+    "sliders"
+      ? "sliders"
+      : "bays") as "bays" | "sliders";
 
   const footprint: Polygon | null = useMemo(() => {
     const fp = building?.footprint_geojson;
@@ -140,14 +172,134 @@ export default function BuildingDetailPage({
     return splitFootprintIntoBays(footprint, bays, frontage);
   }, [footprint, bays]);
 
+  const totalSfFromPolygon = useMemo(
+    () => (footprint ? polygonAreaSqFt(footprint) : 0),
+    [footprint],
+  );
+
+  const sliderFrontage: FrontageAxis = useMemo(
+    () => (bays[0]?.frontageSide as FrontageAxis | undefined) ?? "S",
+    [bays],
+  );
+
+  // Column-grid fractions for the slider bar's structural overlay. Cumulative
+  // bay-width sums normalized to total width; first/last (0 and 1) are
+  // dropped so the SliderBar renders only interior column boundaries.
+  const columnGridFractions = useMemo<number[]>(() => {
+    if (bays.length === 0) return [];
+    const sorted = [...bays].sort((a, b) => a.ordinal - b.ordinal);
+    const total = sorted.reduce((acc, b) => acc + b.widthFt, 0);
+    if (total <= 0) return [];
+    const out: number[] = [];
+    let cum = 0;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      cum += sorted[i]!.widthFt;
+      out.push(cum / total);
+    }
+    return out;
+  }, [bays]);
+
+  // Slice each space's slab into office (front strip) + warehouse (rest)
+  // based on the per-space office_depth_ft. This drives both the 3D map
+  // (one extrusion per zone) and the editor's per-row SF readout.
+  const sliderResolved = useMemo(
+    () =>
+      demisingMode === "sliders" && footprint && sliderSpaces.length > 0
+        ? resolveSpaces(sliderSpaces, totalSfFromPolygon)
+        : [],
+    [demisingMode, footprint, sliderSpaces, totalSfFromPolygon],
+  );
+
+  const sliderSlabs = useMemo(() => {
+    if (!footprint || sliderResolved.length === 0) return [];
+    return sliceFootprintByArea(
+      footprint,
+      sliderFrontage,
+      sliderResolved.map((r) => r.sf),
+    );
+  }, [footprint, sliderFrontage, sliderResolved]);
+
+  const sliderOfficeBreakdown = useMemo(() => {
+    const out: Record<string, { officeSf: number; warehouseSf: number }> = {};
+    sliderResolved.forEach((r, i) => {
+      const slab = sliderSlabs[i];
+      if (!slab) return;
+      const split = placeCornerOffice({
+        slab,
+        side: sliderFrontage,
+        officeSf: r.officeSf ?? null,
+        corner: r.officeCorner ?? "front-left",
+      });
+      out[r.id] = {
+        officeSf: split.officeSf,
+        warehouseSf: split.warehouseSf,
+      };
+    });
+    return out;
+  }, [sliderResolved, sliderSlabs, sliderFrontage]);
+
   const mapBuildings: BuildingGeom[] = useMemo(() => {
     if (!building || !footprint) return [];
+    const heightFt = building.height_ft ? Number(building.height_ft) : null;
 
-    // If we have bays and demising groups, render one extrusion per bay
-    // colored by its owning space. Otherwise fall back to the single
-    // footprint extrusion.
-    if (bays.length > 0 && groups.length > 0 && Object.keys(bayPolygons).length > 0) {
-      const heightFt = building.height_ft ? Number(building.height_ft) : null;
+    // Slider mode: slice the footprint by the current resolved space SFs
+    // (live, even before save). Each space splits into warehouse parts
+    // (the L-shape complement of the office) plus an optional office
+    // extrusion anchored to the chosen corner. When officeSf is null /
+    // 0, the slab is rendered as a single warehouse extrusion.
+    if (demisingMode === "sliders" && sliderResolved.length > 0) {
+      const out: BuildingGeom[] = [];
+      sliderResolved.forEach((r, i) => {
+        const slab = sliderSlabs[i] ?? footprint;
+        const split = placeCornerOffice({
+          slab,
+          side: sliderFrontage,
+          officeSf: r.officeSf ?? null,
+          corner: (r.officeCorner ?? "front-left") as OfficeCorner,
+        });
+        const baseColor = spaceColor(i);
+        // Warehouse parts: 0..2 axis-aligned rectangles tiling the slab
+        // minus the office bbox.
+        split.warehouseParts.forEach((part, partIdx) => {
+          out.push({
+            id: `slab-${r.id}-wh-${partIdx}`,
+            code: `${i}-wh-${partIdx}`,
+            name: `Space ${i + 1} (warehouse)`,
+            footprint: part,
+            heightFt,
+            color: baseColor,
+          });
+        });
+        if (split.office) {
+          // Offices typically have a suspended ceiling around 12-16 ft
+          // even when the warehouse clear height is 30+ ft. Render the
+          // office at a lower height to surface that distinction in 3D.
+          // Floor at 14 ft so it reads as office regardless of building
+          // height; falls back to the building height when smaller.
+          const buildingHeight = building.height_ft
+            ? Number(building.height_ft)
+            : null;
+          const officeHeight = Math.min(14, buildingHeight ?? 14);
+          out.push({
+            id: `slab-${r.id}-of`,
+            code: `${i}-of`,
+            name: `Space ${i + 1} (office)`,
+            footprint: split.office,
+            heightFt: officeHeight,
+            color: lightenColor(baseColor, 0.5),
+          });
+        }
+      });
+      return out;
+    }
+
+    // Legacy bay mode: one extrusion per bay colored by its owning space.
+    if (
+      demisingMode === "bays" &&
+      bays.length > 0 &&
+      groups.length > 0 &&
+      Object.keys(bayPolygons).length > 0
+    ) {
       const bayIdToGroupIndex = new Map<string, number>();
       groups.forEach((g, i) => {
         for (const id of g.bayIds) bayIdToGroupIndex.set(id, i);
@@ -175,11 +327,47 @@ export default function BuildingDetailPage({
         code: building.code,
         name: building.name,
         footprint,
-        heightFt: building.height_ft ? Number(building.height_ft) : null,
+        heightFt,
         color: "#2563eb",
       },
     ];
-  }, [building, footprint, bays, groups, bayPolygons]);
+  }, [
+    building,
+    footprint,
+    bays,
+    groups,
+    bayPolygons,
+    demisingMode,
+    sliderResolved,
+    sliderSlabs,
+    sliderFrontage,
+  ]);
+
+  // Column grid: render bay outlines as a line layer on top of whatever
+  // the demising rendering is. Visible when the user has set up bays —
+  // structural metadata, not tied to demising_mode.
+  const overlayLayers: OverlayLayer[] | undefined = useMemo(() => {
+    if (!showColumnGrid || Object.keys(bayPolygons).length === 0) return [];
+    const features = Object.values(bayPolygons).map((geometry) => ({
+      type: "Feature" as const,
+      geometry,
+      properties: {},
+    }));
+    return [
+      {
+        id: "portviz-column-grid",
+        type: "line",
+        placement: "above",
+        data: { type: "FeatureCollection", features },
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 1,
+          "line-opacity": 0.6,
+          "line-dasharray": [4, 3],
+        },
+      },
+    ];
+  }, [bayPolygons, showColumnGrid]);
 
   return (
     <main className="flex h-screen flex-col">
@@ -249,11 +437,60 @@ export default function BuildingDetailPage({
       {building && (
         <section className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[360px_1fr]">
           <aside className="overflow-y-auto border-r border-neutral-200 bg-white p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-              Demising
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                Demising
+              </h2>
+              <ModeToggle
+                buildingId={building.id}
+                mode={demisingMode}
+              />
+            </div>
 
-            {bays.length === 0 ? (
+            {demisingMode === "sliders" ? (
+              <div className="mt-3 flex flex-col gap-4">
+                <SliderDemisingEditor
+                  buildingId={building.id}
+                  totalSf={Math.round(totalSfFromPolygon)}
+                  initialSpaces={(spacesQuery.data ?? []).map(
+                    (s: {
+                      id: string;
+                      code: string;
+                      position_order: number | null;
+                      target_sf: number | null;
+                      is_pinned: boolean | null;
+                      office_sf: number | null;
+                      office_corner: string | null;
+                    }) => ({
+                      id: s.id,
+                      code: s.code,
+                      position_order: s.position_order,
+                      target_sf: s.target_sf,
+                      is_pinned: s.is_pinned,
+                      office_sf: s.office_sf,
+                      office_corner: s.office_corner,
+                    }),
+                  )}
+                  onChange={handleSliderChange}
+                  officeBreakdown={sliderOfficeBreakdown}
+                  columnGridFractions={columnGridFractions}
+                />
+                <details className="text-xs text-neutral-500">
+                  <summary className="cursor-pointer">
+                    Column grid{" "}
+                    {bays.length > 0 ? `(${bays.length} bays)` : "(not set)"}
+                  </summary>
+                  <p className="mt-1.5 text-[11px] text-neutral-500">
+                    Column spacing is structural metadata — it does not
+                    affect demising in slider mode, but the grid renders as
+                    a faint overlay on the 3D view.
+                  </p>
+                  <div className="mt-2">
+                    <BayQuickSetup buildingId={building.id} />
+                  </div>
+                </details>
+              </div>
+            ) : bays.length === 0 ? (
               <div className="mt-3">
                 <BayQuickSetup buildingId={building.id} />
               </div>
@@ -320,10 +557,24 @@ export default function BuildingDetailPage({
           <div className="flex flex-col overflow-hidden">
             <div className="relative min-h-[55%] flex-1">
               {center ? (
-                <BuildingExtrusionMap
-                  center={center}
-                  buildings={mapBuildings}
-                />
+                <>
+                  <BuildingExtrusionMap
+                    center={center}
+                    buildings={mapBuildings}
+                    overlayLayers={overlayLayers}
+                  />
+                  {Object.keys(bayPolygons).length > 0 && (
+                    <label className="absolute left-3 top-3 z-10 flex cursor-pointer items-center gap-2 rounded-md border border-neutral-200 bg-white/95 px-2 py-1 text-[11px] text-neutral-700 shadow-sm backdrop-blur">
+                      <input
+                        type="checkbox"
+                        checked={showColumnGrid}
+                        onChange={(e) => setShowColumnGrid(e.target.checked)}
+                        className="h-3 w-3"
+                      />
+                      Column grid
+                    </label>
+                  )}
+                </>
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-sm text-neutral-500">
                   No footprint on file — draw one by creating a new building
@@ -356,5 +607,44 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
       <dt className="text-xs uppercase tracking-wide text-neutral-500">{label}</dt>
       <dd className="font-medium">{value}</dd>
     </div>
+  );
+}
+
+/**
+ * Compact toggle that flips a building between bay-based and slider-based
+ * demising. The mutation is best-effort; on success, the parent page
+ * refetches via byCompositeId invalidation and re-renders the right
+ * editor for the new mode.
+ */
+function ModeToggle({
+  buildingId,
+  mode,
+}: {
+  buildingId: string;
+  mode: "bays" | "sliders";
+}) {
+  const utils = api.useUtils();
+  const setMode = api.building.setDemisingMode.useMutation({
+    onSuccess: async () => {
+      await utils.building.byCompositeId.invalidate();
+      toastSuccess(`Switched to ${mode === "bays" ? "slider" : "bay"} mode`);
+    },
+    onError: (e) => toastError(e.message),
+  });
+  const next = mode === "bays" ? "sliders" : "bays";
+  return (
+    <button
+      type="button"
+      onClick={() => setMode.mutate({ id: buildingId, mode: next })}
+      disabled={setMode.isPending}
+      className="rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-[10px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+      title={`Switch to ${next} mode`}
+    >
+      {setMode.isPending
+        ? "…"
+        : mode === "sliders"
+          ? "Sliders ▾"
+          : "Bays ▾"}
+    </button>
   );
 }

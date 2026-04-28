@@ -59,6 +59,8 @@ export function PropertyHero({
     truckCourts: true,
     parcel: true,
     accessPoints: true,
+    parking: true,
+    yard: true,
   });
 
   const overlayLayers = useMemo(() => {
@@ -74,6 +76,8 @@ export function PropertyHero({
     () => ({
       parcel: !!projectAmenities?.parcel,
       accessPoints: (projectAmenities?.accessPoints?.length ?? 0) > 0,
+      parking: !!projectAmenities?.parking,
+      yard: !!projectAmenities?.yard,
     }),
     [projectAmenities],
   );
@@ -116,6 +120,9 @@ export function PropertyHero({
     };
     for (const b of mapBuildings) expand(b.footprint!);
     if (projectAmenities?.parcel) expand(projectAmenities.parcel);
+    if (projectAmenities?.parking?.polygon)
+      expand(projectAmenities.parking.polygon);
+    if (projectAmenities?.yard) expand(projectAmenities.yard);
     return Number.isFinite(w) ? [[w, s], [e, n]] : null;
   }, [mapBuildings, projectAmenities]);
 
@@ -154,6 +161,7 @@ export function PropertyHero({
           toggles={toggles}
           onChange={setToggles}
           available={available}
+          parkingKind={projectAmenities?.parking?.kind ?? null}
         />
       )}
     </div>

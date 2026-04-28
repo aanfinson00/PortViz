@@ -108,4 +108,100 @@ export const spaceRouter = router({
     if (error) throw error;
     return data;
   }),
+
+  /**
+   * Bulk upsert for slider-based demising. The editor sends the full set
+   * of spaces for a building on every save: existing ids are updated,
+   * spaces with id starting with "new:" are inserted (the editor coins
+   * temp ids client-side), and any space currently in the DB but missing
+   * from the payload is deleted.
+   *
+   * Single transaction in spirit (sequential supabase calls; failures
+   * propagate). We don't use the audit hook on these — they're high-
+   * frequency edits and the per-mutation event would be noisy.
+   */
+  bulkUpsertSliders: editorProcedure
+    .input(
+      z.object({
+        buildingId: z.string().uuid(),
+        spaces: z.array(
+          z.object({
+            id: z.string(),
+            code: codeSchema,
+            positionOrder: z.number().int().min(0),
+            targetSf: z.number().int().min(0).nullable(),
+            isPinned: z.boolean(),
+            officeSf: z.number().int().min(0).nullable(),
+            officeCorner: z
+              .enum(["front-left", "front-right", "rear-left", "rear-right"])
+              .nullable(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Existing rows for this building.
+      const { data: existing, error: listErr } = await ctx.supabase
+        .from("space")
+        .select("id, code")
+        .eq("org_id", ctx.orgId)
+        .eq("building_id", input.buildingId);
+      if (listErr) throw listErr;
+      const keepIds = new Set(
+        input.spaces.filter((s) => !s.id.startsWith("new:")).map((s) => s.id),
+      );
+      const toDelete = (existing ?? [])
+        .map((r) => r.id)
+        .filter((id) => !keepIds.has(id));
+
+      // Apply updates first, then inserts, then deletes — mirrors the
+      // mental model "tweak, add, prune".
+      const idMap: Record<string, string> = {};
+      for (const s of input.spaces) {
+        if (s.id.startsWith("new:")) {
+          const { data, error } = await ctx.supabase
+            .from("space")
+            .insert({
+              org_id: ctx.orgId,
+              building_id: input.buildingId,
+              code: s.code,
+              status: "vacant",
+              position_order: s.positionOrder,
+              target_sf: s.targetSf,
+              is_pinned: s.isPinned,
+              office_sf: s.officeSf,
+              office_corner: s.officeCorner,
+            })
+            .select("id")
+            .single();
+          if (error) throw error;
+          idMap[s.id] = data.id;
+        } else {
+          const { error } = await ctx.supabase
+            .from("space")
+            .update({
+              code: s.code,
+              position_order: s.positionOrder,
+              target_sf: s.targetSf,
+              is_pinned: s.isPinned,
+              office_sf: s.officeSf,
+              office_corner: s.officeCorner,
+            })
+            .eq("id", s.id)
+            .eq("org_id", ctx.orgId);
+          if (error) throw error;
+        }
+      }
+
+      if (toDelete.length > 0) {
+        const { error } = await ctx.supabase
+          .from("space")
+          .delete()
+          .in("id", toDelete)
+          .eq("org_id", ctx.orgId);
+        if (error) throw error;
+      }
+
+      return { ok: true, idMap };
+    }),
 });
