@@ -1,12 +1,20 @@
 import { z } from "zod";
 import { editorProcedure, orgProcedure, router } from "../init";
 
-const entityType = z.enum(["project", "building", "space", "tenant"]);
+const entityType = z.enum([
+  "project",
+  "building",
+  "space",
+  "tenant",
+  "lease",
+]);
 const documentKind = z.enum([
   "lease",
   "site_plan",
   "floor_plan",
   "photo",
+  "survey",
+  "marketing",
   "other",
 ]);
 

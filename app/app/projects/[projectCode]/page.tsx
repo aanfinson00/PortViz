@@ -15,10 +15,20 @@ import { TenantsList } from "@/components/property/TenantsList";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide } from "@/lib/demising";
 import {
+  expiringWithinMonths,
+  rollupExpirations,
+  rollupTenants,
+  type BuildingForRollup,
+  type LeaseForRollup,
+} from "@/lib/metricsRollup";
+import {
   computePropertyMetrics,
-  spaceSf,
   type BuildingForMetrics,
 } from "@/lib/propertyMetrics";
+import {
+  parseAccessPoints,
+  parseParcelPolygon,
+} from "@/lib/projectAmenities";
 import { api } from "@/lib/trpc/react";
 
 type MapBuildingRow = {
@@ -212,80 +222,68 @@ export default function ProjectDetailPage({
     });
   }, [buildingsQuery.data, activeLeases, totalSfById]);
 
-  const tenantsRollup = useMemo(() => {
-    const acc = new Map<
-      string,
-      {
-        id: string;
-        code: string;
-        name: string;
-        brandColor: string | null;
-        totalSf: number;
-        spaceCount: number;
-      }
-    >();
-    for (const card of cards) {
-      for (const s of card.spaces) {
-        if (!s.tenantName) continue;
-        const sf = spaceSf(s, card.bays);
-        const lease = activeLeases.find((l) => l.space_id === s.id);
-        const tenant = lease ? firstTenant(lease.tenant) : null;
-        if (!tenant) continue;
-        const existing = acc.get(tenant.id) ?? {
-          id: tenant.id,
-          code: tenant.code,
-          name: tenant.name,
-          brandColor: tenant.brand_color,
-          totalSf: 0,
-          spaceCount: 0,
-        };
-        existing.totalSf += sf;
-        existing.spaceCount += 1;
-        acc.set(tenant.id, existing);
-      }
-    }
-    return Array.from(acc.values());
-  }, [cards, activeLeases]);
-
-  const expirationLeases = useMemo(() => {
-    const buildingByIdToCode = new Map<string, string>();
-    const spaceById = new Map<string, { code: string; buildingId: string }>();
-    for (const b of (buildingsQuery.data ?? []) as MapBuildingRow[]) {
-      buildingByIdToCode.set(b.id, b.code);
-      for (const s of b.space) {
-        spaceById.set(s.id, { code: s.code, buildingId: b.id });
-      }
-    }
+  // Convert the active-lease rows into the LeaseForRollup shape the
+  // metricsRollup helpers expect. Doing it once here keeps both rollups
+  // (tenants + expirations) on the same canonical input.
+  const leasesForRollup: LeaseForRollup[] = useMemo(() => {
     return activeLeases.flatMap((l) => {
-      const sp = spaceById.get(l.space_id);
-      if (!sp) return [];
-      const buildingCode = buildingByIdToCode.get(sp.buildingId);
-      const tenant = firstTenant(l.tenant);
-      if (!tenant || !buildingCode) return [];
+      const t = firstTenant(l.tenant);
       return [
         {
           id: l.id,
+          spaceId: l.space_id,
           endDate: l.end_date,
-          spaceCode: sp.code,
-          buildingCode,
-          projectCode: project.data?.code ?? "",
-          tenantName: tenant.name,
-          tenantColor: tenant.brand_color,
           baseRentPsf: l.base_rent_psf,
+          tenant: t
+            ? {
+                id: t.id,
+                code: t.code,
+                name: t.name,
+                brandColor: t.brand_color,
+              }
+            : null,
         },
       ];
     });
-  }, [activeLeases, buildingsQuery.data, project.data?.code]);
+  }, [activeLeases]);
 
-  const expiringIn12moCount = useMemo(() => {
-    const today = new Date();
-    const cutoff = new Date(today);
-    cutoff.setMonth(cutoff.getMonth() + 12);
-    return expirationLeases.filter((l) => {
-      const end = new Date(l.endDate);
-      return end >= today && end <= cutoff;
-    }).length;
-  }, [expirationLeases]);
+  // The cards array already carries the right shape — pass it straight
+  // through to the rollup helpers (they only read id/code/bays/spaces).
+  const buildingsForRollup: BuildingForRollup[] = useMemo(
+    () =>
+      cards.map((c) => ({
+        id: c.id,
+        code: c.code,
+        bays: c.bays,
+        spaces: c.spaces.map((s) => ({
+          id: s.id,
+          code: s.code,
+          targetSf: s.targetSf,
+          bayIds: s.bayIds,
+        })),
+      })),
+    [cards],
+  );
+
+  const tenantsRollup = useMemo(
+    () => rollupTenants({ buildings: buildingsForRollup, leases: leasesForRollup }),
+    [buildingsForRollup, leasesForRollup],
+  );
+
+  const expirationLeases = useMemo(
+    () =>
+      rollupExpirations({
+        buildings: buildingsForRollup,
+        leases: leasesForRollup,
+        projectCode: project.data?.code ?? "",
+      }),
+    [buildingsForRollup, leasesForRollup, project.data?.code],
+  );
+
+  const expiringIn12moCount = useMemo(
+    () => expiringWithinMonths(expirationLeases, 12),
+    [expirationLeases],
+  );
 
   const fallbackCenter: [number, number] | null =
     project.data?.lng != null && project.data?.lat != null
@@ -406,6 +404,14 @@ export default function ProjectDetailPage({
             buildings={heroBuildings}
             fallbackCenter={fallbackCenter}
             amenities={heroAmenities}
+            projectAmenities={{
+              parcel: parseParcelPolygon(
+                (project.data as { parcel_polygon?: unknown }).parcel_polygon,
+              ),
+              accessPoints: parseAccessPoints(
+                (project.data as { access_points?: unknown }).access_points,
+              ),
+            }}
           />
 
           {/* Headline KPIs */}

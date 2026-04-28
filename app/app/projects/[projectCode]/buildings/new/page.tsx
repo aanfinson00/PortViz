@@ -3,7 +3,7 @@
 import type { Polygon } from "geojson";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { FootprintEditor } from "@/components/map/FootprintEditor";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
@@ -41,10 +41,16 @@ export default function NewBuildingPage({
   const [warehouseSf, setWarehouseSf] = useState("0");
   const [footprint, setFootprint] = useState<Polygon | null>(null);
 
-  const center: [number, number] =
-    projectQuery.data?.lng != null && projectQuery.data?.lat != null
-      ? [projectQuery.data.lng, projectQuery.data.lat]
-      : [-98.5795, 39.8283];
+  // Stable identity across re-renders so form keystrokes don't remount the
+  // map. The lat/lng dependency array means the array only changes when the
+  // project is actually relocated.
+  const center = useMemo<[number, number]>(
+    () =>
+      projectQuery.data?.lng != null && projectQuery.data?.lat != null
+        ? [projectQuery.data.lng, projectQuery.data.lat]
+        : [-98.5795, 39.8283],
+    [projectQuery.data?.lng, projectQuery.data?.lat],
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

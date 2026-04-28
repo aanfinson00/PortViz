@@ -59,10 +59,13 @@ export function buildAmenityLayers(
 
   for (const b of buildings) {
     if (!b.footprint) continue;
-    // All bays in a building share a frontage side; pick the first.
-    const side: FrontageSide | null =
-      b.bays[0]?.frontageSide ?? null;
-    if (!side) continue;
+    // All bays in a building share a frontage side; pick the first. When
+    // a building has no bays yet (just created, demising not run), default
+    // to "S" so a truck court depth set on the AmenitiesPanel still renders
+    // somewhere visible. Once the user adds bays, the actual frontage_side
+    // takes over. (Long-term: a building.frontage_side column would let
+    // users pick explicitly without setting up bays first.)
+    const side: FrontageSide = b.bays[0]?.frontageSide ?? "S";
 
     if (toggles.truckCourts) {
       const court = truckCourtPolygon({

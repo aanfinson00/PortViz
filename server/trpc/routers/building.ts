@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import type { Polygon } from "geojson";
 import { z } from "zod";
 import { codeSchema } from "@/lib/codes";
+import { logEvent } from "../audit";
 import { editorProcedure, orgProcedure, router } from "../init";
 
 /** Row shape returned by listForMap — kept stable across the augmented and
@@ -115,13 +116,20 @@ export const buildingRouter = router({
         return (first.data ?? []) as unknown as ListForMapRow[];
       }
 
-      // PGRST204 = PostgREST "column does not exist" surface; 42703 is the
-      // raw Postgres SQLSTATE. Treat both as "migration not applied yet"
-      // and degrade gracefully rather than failing the whole dashboard.
+      // Postgres 42703 is the raw "column does not exist" SQLSTATE. PostgREST
+      // surfaces missing-column problems either with code PGRST204 / PGRST116
+      // and a "schema cache" message ("Could not find the X column of Y in
+      // the schema cache"), or with the underlying 42703 when caching is
+      // off. We treat any of these as "migration not applied yet" and
+      // degrade gracefully rather than failing the whole dashboard.
+      const msg = first.error.message ?? "";
       const looksLikeMissingColumn =
         first.error.code === "42703" ||
         first.error.code === "PGRST204" ||
-        /column .* does not exist/i.test(first.error.message);
+        first.error.code === "PGRST116" ||
+        /column .* does not exist/i.test(msg) ||
+        /could not find .* column/i.test(msg) ||
+        /schema cache/i.test(msg);
       if (!looksLikeMissingColumn) throw first.error;
 
       const fallback = await tryQuery(core);
@@ -194,6 +202,14 @@ export const buildingRouter = router({
         .select()
         .single();
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "building",
+        entityId: data.id,
+        kind: "created",
+        payload: { code: data.code, name: data.name },
+      });
       return data;
     }),
 
@@ -221,6 +237,14 @@ export const buildingRouter = router({
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "building",
+        entityId: input.id,
+        kind: "updated",
+        payload: { patch: { truck_court_depth_ft: input.truckCourtDepthFt } },
+      });
       return { ok: true };
     }),
 
@@ -245,6 +269,13 @@ export const buildingRouter = router({
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "building",
+        entityId: input.id,
+        kind: "deleted",
+      });
       return { ok: true };
     }),
 });
