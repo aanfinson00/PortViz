@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
@@ -11,9 +12,7 @@ export default function TenantsPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-8">
-      <Link href="/app" className="text-sm text-blue-600 hover:underline">
-        ← Back to portfolio
-      </Link>
+      <Breadcrumb crumbs={[{ label: "Tenants" }]} />
 
       <header className="mt-4 flex items-end justify-between">
         <div>
