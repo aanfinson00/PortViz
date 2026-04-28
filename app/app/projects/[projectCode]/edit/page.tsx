@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { PortfolioMap } from "@/components/map/PortfolioMap";
+import { ProjectAmenitiesPanel } from "@/components/property/amenities/ProjectAmenitiesPanel";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
@@ -219,6 +220,21 @@ export default function EditProjectPage({
           />
         </div>
       </section>
+
+      {project.data?.id && lat && lng && (
+        <section className="border-t border-neutral-200 bg-neutral-50 p-6">
+          <ProjectAmenitiesPanel
+            projectId={project.data.id}
+            center={[Number(lng), Number(lat)]}
+            initialParcel={
+              (project.data as { parcel_polygon?: unknown }).parcel_polygon
+            }
+            initialAccessPoints={
+              (project.data as { access_points?: unknown }).access_points
+            }
+          />
+        </section>
+      )}
     </main>
   );
 }

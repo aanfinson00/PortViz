@@ -20,6 +20,27 @@ const projectUpdate = z.object({
   description: z.string().max(2000).nullable().optional(),
 });
 
+/**
+ * Site-amenity input. Kept loose (jsonb-shaped) since iteration is
+ * frequent and the stored shape is validated permissively at read time
+ * via lib/projectAmenities#parseAccessPoints / parseParcelPolygon.
+ */
+const polygonSchema = z.object({
+  type: z.literal("Polygon"),
+  coordinates: z
+    .array(z.array(z.array(z.number()).min(2).max(3)).min(4))
+    .min(1),
+});
+
+const accessPointSchema = z.object({
+  lng: z.number().min(-180).max(180),
+  lat: z.number().min(-90).max(90),
+  label: z.string().max(80).optional(),
+  role: z
+    .enum(["main", "truck", "service", "emergency", "other"])
+    .optional(),
+});
+
 export const projectRouter = router({
   list: orgProcedure.query(async ({ ctx }) => {
     const { data, error } = await ctx.supabase
@@ -81,6 +102,38 @@ export const projectRouter = router({
         .single();
       if (error) throw error;
       return data;
+    }),
+
+  /**
+   * Narrowly scoped update for project-level site amenities. Kept
+   * separate from `update` so callers (e.g. ProjectAmenitiesPanel) can't
+   * accidentally clobber name/address/etc. Both fields are nullable —
+   * passing null clears them.
+   */
+  updateAmenities: editorProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        parcelPolygon: polygonSchema.nullable().optional(),
+        accessPoints: z.array(accessPointSchema).max(40).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const patch: Record<string, unknown> = {};
+      if (input.parcelPolygon !== undefined) {
+        patch.parcel_polygon = input.parcelPolygon;
+      }
+      if (input.accessPoints !== undefined) {
+        patch.access_points = input.accessPoints;
+      }
+      if (Object.keys(patch).length === 0) return { ok: true };
+      const { error } = await ctx.supabase
+        .from("project")
+        .update(patch)
+        .eq("id", input.id)
+        .eq("org_id", ctx.orgId);
+      if (error) throw error;
+      return { ok: true };
     }),
 
   delete: editorProcedure

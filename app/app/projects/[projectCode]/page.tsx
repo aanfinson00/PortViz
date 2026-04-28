@@ -19,6 +19,10 @@ import {
   spaceSf,
   type BuildingForMetrics,
 } from "@/lib/propertyMetrics";
+import {
+  parseAccessPoints,
+  parseParcelPolygon,
+} from "@/lib/projectAmenities";
 import { api } from "@/lib/trpc/react";
 
 type MapBuildingRow = {
@@ -406,6 +410,14 @@ export default function ProjectDetailPage({
             buildings={heroBuildings}
             fallbackCenter={fallbackCenter}
             amenities={heroAmenities}
+            projectAmenities={{
+              parcel: parseParcelPolygon(
+                (project.data as { parcel_polygon?: unknown }).parcel_polygon,
+              ),
+              accessPoints: parseAccessPoints(
+                (project.data as { access_points?: unknown }).access_points,
+              ),
+            }}
           />
 
           {/* Headline KPIs */}

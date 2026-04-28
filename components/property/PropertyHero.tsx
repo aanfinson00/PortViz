@@ -6,12 +6,18 @@ import {
   BuildingExtrusionMap,
   type BuildingGeom,
 } from "@/components/map/BuildingExtrusionMap";
-import { AmenitiesLegend } from "@/components/property/amenities/AmenitiesLegend";
+import {
+  AmenitiesLegend,
+  type AllAmenityToggles,
+} from "@/components/property/amenities/AmenitiesLegend";
 import {
   buildAmenityLayers,
   type AmenityBuilding,
-  type AmenityToggles,
 } from "@/components/property/amenities/buildAmenityLayers";
+import {
+  buildProjectAmenityLayers,
+  type ProjectAmenityInput,
+} from "@/components/property/amenities/buildProjectAmenityLayers";
 
 interface PropertyHeroProps {
   buildings: Array<{
@@ -23,11 +29,18 @@ interface PropertyHeroProps {
   }>;
   fallbackCenter?: [number, number] | null;
   /**
-   * Optional amenity inputs (bays per building + truck-court depth). When
-   * provided, the hero composes a "Site amenities" overlay with toggles in
-   * a small legend. Omit to render the plain 3D view.
+   * Optional building-level amenity inputs (bays per building +
+   * truck-court depth). When provided, the hero composes a "Site
+   * amenities" overlay with toggles in a small legend. Omit to render
+   * the plain 3D view.
    */
   amenities?: AmenityBuilding[];
+  /**
+   * Optional project-level amenities (parcel boundary + access points).
+   * Independent of `amenities` so a project with one but not the other
+   * still renders cleanly.
+   */
+  projectAmenities?: ProjectAmenityInput;
 }
 
 /**
@@ -39,15 +52,32 @@ export function PropertyHero({
   buildings,
   fallbackCenter,
   amenities,
+  projectAmenities,
 }: PropertyHeroProps) {
-  const [toggles, setToggles] = useState<AmenityToggles>({
+  const [toggles, setToggles] = useState<AllAmenityToggles>({
     docks: true,
     truckCourts: true,
+    parcel: true,
+    accessPoints: true,
   });
-  const overlayLayers = useMemo(
-    () => (amenities ? buildAmenityLayers(amenities, toggles) : undefined),
-    [amenities, toggles],
+
+  const overlayLayers = useMemo(() => {
+    const layers = [];
+    if (amenities) layers.push(...buildAmenityLayers(amenities, toggles));
+    if (projectAmenities) {
+      layers.push(...buildProjectAmenityLayers(projectAmenities, toggles));
+    }
+    return layers.length > 0 ? layers : undefined;
+  }, [amenities, projectAmenities, toggles]);
+
+  const available = useMemo(
+    () => ({
+      parcel: !!projectAmenities?.parcel,
+      accessPoints: (projectAmenities?.accessPoints?.length ?? 0) > 0,
+    }),
+    [projectAmenities],
   );
+
   const mapBuildings: BuildingGeom[] = useMemo(
     () =>
       buildings.flatMap((b) => {
@@ -66,16 +96,16 @@ export function PropertyHero({
     [buildings],
   );
 
-  // Union bbox across every building's footprint. Powers fitBounds so multi-
-  // building properties don't hide buildings 2..N off-screen.
+  // Union bbox across every building's footprint *and* the parcel polygon
+  // when set, so a parcel that extends past the buildings still fits in
+  // the camera frame.
   const bounds = useMemo<[[number, number], [number, number]] | null>(() => {
-    if (mapBuildings.length === 0) return null;
     let w = Infinity;
     let s = Infinity;
     let e = -Infinity;
     let n = -Infinity;
-    for (const b of mapBuildings) {
-      for (const ring of b.footprint!.coordinates) {
+    const expand = (poly: Polygon) => {
+      for (const ring of poly.coordinates) {
         for (const [x, y] of ring) {
           if (x < w) w = x;
           if (x > e) e = x;
@@ -83,9 +113,11 @@ export function PropertyHero({
           if (y > n) n = y;
         }
       }
-    }
+    };
+    for (const b of mapBuildings) expand(b.footprint!);
+    if (projectAmenities?.parcel) expand(projectAmenities.parcel);
     return Number.isFinite(w) ? [[w, s], [e, n]] : null;
-  }, [mapBuildings]);
+  }, [mapBuildings, projectAmenities]);
 
   const center = useMemo<[number, number] | null>(() => {
     if (bounds) {
@@ -106,6 +138,9 @@ export function PropertyHero({
     );
   }
 
+  const showLegend =
+    (amenities && amenities.length > 0) || projectAmenities != null;
+
   return (
     <div className="relative h-72 w-full overflow-hidden rounded-md border border-neutral-200">
       <BuildingExtrusionMap
@@ -114,8 +149,12 @@ export function PropertyHero({
         bounds={bounds}
         overlayLayers={overlayLayers}
       />
-      {amenities && amenities.length > 0 && (
-        <AmenitiesLegend toggles={toggles} onChange={setToggles} />
+      {showLegend && (
+        <AmenitiesLegend
+          toggles={toggles}
+          onChange={setToggles}
+          available={available}
+        />
       )}
     </div>
   );
