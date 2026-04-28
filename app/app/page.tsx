@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AppNav } from "@/components/layout/AppNav";
+import { spaceColor } from "@/components/demising/DemisingEditor";
 import { BuildingPanel } from "@/components/map/BuildingPanel";
 import {
   PortfolioMap,
@@ -11,6 +12,8 @@ import {
   type ProjectPinData,
 } from "@/components/map/PortfolioMap";
 import { NewProjectDrawer } from "@/components/map/NewProjectDrawer";
+import type { Bay, FrontageSide } from "@/lib/demising";
+import { splitFootprintIntoBays } from "@/lib/geometry";
 import { api } from "@/lib/trpc/react";
 import type { Polygon } from "geojson";
 
@@ -53,39 +56,110 @@ export default function PortfolioMapPage() {
     [allProjects, selectedCode],
   );
 
-  const buildingsQuery = api.building.listByProject.useQuery(
+  const buildingsQuery = api.building.listForMap.useQuery(
     { projectId: selectedProject?.id ?? "" },
     { enabled: Boolean(selectedProject?.id), retry: false },
   );
 
+  type MapBuildingRow = {
+    id: string;
+    code: string;
+    name: string | null;
+    footprint_geojson: Polygon | null;
+    height_ft: number | null;
+    bay: Array<{
+      id: string;
+      ordinal: number;
+      width_ft: number;
+      depth_ft: number;
+      dock_door_count: number;
+      drive_in_count: number;
+      has_yard_access: boolean;
+      frontage_side: string;
+    }>;
+    space: Array<{
+      id: string;
+      code: string;
+      status: string;
+      space_bay: Array<{ bay_id: string }>;
+    }>;
+  };
+
   const buildingMetaById = useMemo(() => {
     const map = new Map<string, { code: string }>();
-    for (const b of buildingsQuery.data ?? []) {
-      map.set((b as { id: string }).id, { code: (b as { code: string }).code });
+    for (const b of (buildingsQuery.data ?? []) as MapBuildingRow[]) {
+      map.set(b.id, { code: b.code });
     }
     return map;
   }, [buildingsQuery.data]);
 
   const selectedBuildings = useMemo<PortfolioBuilding[]>(() => {
     if (!selectedProject) return [];
-    return (buildingsQuery.data ?? []).flatMap(
-      (b: {
-        id: string;
-        code: string;
-        footprint_geojson: Polygon | null;
-        height_ft: number | null;
-      }) => {
-        if (!b.footprint_geojson) return [];
+    const rows = (buildingsQuery.data ?? []) as MapBuildingRow[];
+    return rows.flatMap((b) => {
+      if (!b.footprint_geojson) return [];
+      const heightFt = b.height_ft ? Number(b.height_ft) : null;
+
+      const bays: Bay[] = (b.bay ?? []).map((x) => ({
+        id: x.id,
+        ordinal: x.ordinal,
+        widthFt: Number(x.width_ft),
+        depthFt: Number(x.depth_ft),
+        dockDoorCount: x.dock_door_count,
+        driveInCount: x.drive_in_count,
+        hasYardAccess: x.has_yard_access,
+        frontageSide: x.frontage_side as FrontageSide,
+      }));
+
+      // No demising info → render the whole building in one color.
+      const hasDemising =
+        bays.length > 0 &&
+        (b.space ?? []).some((s) => (s.space_bay ?? []).length > 0);
+      if (!hasDemising) {
         return [
           {
             id: b.id,
             code: b.code,
             footprint: b.footprint_geojson,
-            heightFt: b.height_ft ? Number(b.height_ft) : null,
+            heightFt,
           },
         ];
-      },
-    );
+      }
+
+      // Map each bay to its owning space's index (used for color).
+      const sortedSpaces = [...(b.space ?? [])].sort((a, c) =>
+        a.code.localeCompare(c.code),
+      );
+      const bayIdToSpaceIndex = new Map<string, number>();
+      sortedSpaces.forEach((s, i) => {
+        for (const sb of s.space_bay ?? []) {
+          bayIdToSpaceIndex.set(sb.bay_id, i);
+        }
+      });
+
+      const polysByBayId = splitFootprintIntoBays(
+        b.footprint_geojson,
+        bays,
+        bays[0]?.frontageSide ?? "S",
+      );
+
+      return bays.flatMap((bay) => {
+        const poly = polysByBayId[bay.id];
+        if (!poly) return [];
+        const spaceIndex = bayIdToSpaceIndex.get(bay.id) ?? 0;
+        return [
+          {
+            // Keep the building id on each bay sub-feature so clicking still
+            // opens the building's demising panel.
+            id: b.id,
+            code: `${b.code}-bay${bay.ordinal}`,
+            footprint: poly,
+            heightFt,
+            color: spaceColor(spaceIndex),
+          },
+        ];
+      });
+    });
   }, [buildingsQuery.data, selectedProject]);
 
   const authStatus: "loading" | "signed_out" | "no_org" | "ready" =

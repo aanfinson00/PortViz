@@ -32,10 +32,49 @@ export const leaseRouter = router({
     }),
 
   /**
-   * Rent-roll query: one row per space in a building, with its current (or
-   * most recent) lease and tenant joined in. Returned unordered by PostgREST;
-   * the UI sorts by space code.
+   * Active leases at a project: every lease whose date range covers today,
+   * joined to its space (with bay assignments) and tenant. Used by the
+   * property dashboard to compute occupancy and to render the rent roll +
+   * expirations tabs in one round trip.
    */
+  activeByProject: orgProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: buildings, error: buildingsErr } = await ctx.supabase
+        .from("building")
+        .select("id")
+        .eq("org_id", ctx.orgId)
+        .eq("project_id", input.projectId);
+      if (buildingsErr) throw buildingsErr;
+      const buildingIds = (buildings ?? []).map((b) => b.id);
+      if (buildingIds.length === 0) return [];
+
+      const { data: spaces, error: spacesErr } = await ctx.supabase
+        .from("space")
+        .select("id")
+        .eq("org_id", ctx.orgId)
+        .in("building_id", buildingIds);
+      if (spacesErr) throw spacesErr;
+      const spaceIds = (spaces ?? []).map((s) => s.id);
+      if (spaceIds.length === 0) return [];
+
+      const { data, error } = await ctx.supabase
+        .from("lease")
+        .select(
+          `id, space_id, start_date, end_date, base_rent_psf, term_months, ti_allowance_psf, free_rent_months,
+           tenant:tenant_id (id, code, name, brand_color)`,
+        )
+        .eq("org_id", ctx.orgId)
+        .in("space_id", spaceIds)
+        .lte("start_date", today)
+        .gte("end_date", today)
+        .order("end_date");
+      if (error) throw error;
+      return data ?? [];
+    }),
+
+
   rentRoll: orgProcedure
     .input(z.object({ buildingId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {

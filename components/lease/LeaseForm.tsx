@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
+import { addMonthsMinusDay } from "@/lib/leaseDate";
 import { api } from "@/lib/trpc/react";
 
 interface LeaseFormProps {
@@ -19,21 +21,33 @@ export function LeaseForm({ spaceId, onCreated }: LeaseFormProps) {
   const create = api.lease.create.useMutation({
     onSuccess: async () => {
       await utils.lease.listBySpace.invalidate({ spaceId });
+      toastSuccess("Lease saved");
       onCreated?.();
     },
+    onError: (e) => toastError(e.message),
   });
 
   const [tenantId, setTenantId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [baseRentPsf, setBaseRentPsf] = useState("");
-  const [escalationPct, setEscalationPct] = useState("");
-  const [termMonths, setTermMonths] = useState("");
+  // Industrial sweet-spot defaults; users override freely.
+  const [escalationPct, setEscalationPct] = useState("3");
+  const [termMonths, setTermMonths] = useState("60");
   const [tiAllowancePsf, setTiAllowancePsf] = useState("");
   const [freeRentMonths, setFreeRentMonths] = useState("");
   const [commissionPsf, setCommissionPsf] = useState("");
   const [securityDeposit, setSecurityDeposit] = useState("");
   const [notes, setNotes] = useState("");
+  // Once the user manually edits the end date, stop auto-overwriting it on
+  // start/term changes. Clearing the field re-arms the auto-compute.
+  const [endDateDirty, setEndDateDirty] = useState(false);
+
+  function syncEndDate(start: string, term: string) {
+    if (endDateDirty) return;
+    const next = addMonthsMinusDay(start, term);
+    if (next) setEndDate(next);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -92,7 +106,10 @@ export function LeaseForm({ spaceId, onCreated }: LeaseFormProps) {
           <input
             type="date"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => {
+              setStartDate(e.target.value);
+              syncEndDate(e.target.value, termMonths);
+            }}
             required
             className={inputClass}
           />
@@ -101,7 +118,12 @@ export function LeaseForm({ spaceId, onCreated }: LeaseFormProps) {
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              // Cleared field re-arms auto-compute; any other edit "dirties"
+              // the field so start/term changes won't clobber it.
+              setEndDateDirty(e.target.value !== "");
+            }}
             required
             className={inputClass}
           />
@@ -112,7 +134,10 @@ export function LeaseForm({ spaceId, onCreated }: LeaseFormProps) {
         <Field label="Term (mo)">
           <input
             value={termMonths}
-            onChange={(e) => setTermMonths(e.target.value)}
+            onChange={(e) => {
+              setTermMonths(e.target.value);
+              syncEndDate(startDate, e.target.value);
+            }}
             inputMode="numeric"
             className={inputClass}
           />

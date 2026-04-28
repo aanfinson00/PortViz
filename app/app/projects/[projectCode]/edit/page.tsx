@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { PortfolioMap } from "@/components/map/PortfolioMap";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
 export default function EditProjectPage({
@@ -24,16 +26,20 @@ export default function EditProjectPage({
         utils.project.list.invalidate(),
         utils.project.byCode.invalidate({ code: projectCode.toUpperCase() }),
       ]);
+      toastSuccess("Project saved");
       router.push(`/app/projects/${projectCode.toUpperCase()}`);
       router.refresh();
     },
+    onError: (e) => toastError(e.message),
   });
   const remove = api.project.delete.useMutation({
     onSuccess: async () => {
       await utils.project.list.invalidate();
+      toastSuccess(`Deleted project ${projectCode.toUpperCase()}`);
       router.push("/app");
       router.refresh();
     },
+    onError: (e) => toastError(e.message),
   });
 
   const [name, setName] = useState("");
@@ -95,12 +101,15 @@ export default function EditProjectPage({
     <main className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-4">
         <div>
-          <Link
-            href={`/app/projects/${projectCode.toUpperCase()}`}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            ← {projectCode.toUpperCase()}
-          </Link>
+          <Breadcrumb
+            crumbs={[
+              {
+                label: projectCode.toUpperCase(),
+                href: `/app/projects/${projectCode.toUpperCase()}`,
+              },
+              { label: "Edit" },
+            ]}
+          />
           <h1 className="mt-1 text-lg font-semibold">Edit project</h1>
           <p className="text-sm text-neutral-500">
             Click anywhere on the map to set or move the pin.

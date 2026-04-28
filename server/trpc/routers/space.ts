@@ -64,6 +64,35 @@ export const spaceRouter = router({
       return { project, building, space };
     }),
 
+  update: editorProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        code: codeSchema.optional(),
+        status: z
+          .enum(["vacant", "available", "pending", "leased"])
+          .optional(),
+        target_sf: z.number().int().min(0).nullable().optional(),
+        notes: z.string().max(2000).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+      const patch: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(rest)) {
+        if (v !== undefined) patch[k] = v;
+      }
+      const { data, error } = await ctx.supabase
+        .from("space")
+        .update(patch)
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }),
+
   create: editorProcedure.input(spaceInput).mutation(async ({ ctx, input }) => {
     const { data, error } = await ctx.supabase
       .from("space")

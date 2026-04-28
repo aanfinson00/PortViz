@@ -18,6 +18,8 @@ export interface PortfolioBuilding {
   code: string;
   footprint: Polygon;
   heightFt: number | null;
+  /** Optional fill color override; defaults to portfolio blue. */
+  color?: string;
 }
 
 interface PortfolioMapProps {
@@ -98,43 +100,6 @@ export function PortfolioMap({
       onMapClickRef.current?.({ lng: e.lngLat.lng, lat: e.lngLat.lat });
     });
 
-    // Reusable building extrusion layer. Source is empty until we have data.
-    map.on("load", () => {
-      if (!map.getSource(BUILDINGS_SOURCE)) {
-        map.addSource(BUILDINGS_SOURCE, {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] },
-        });
-        map.addLayer({
-          id: BUILDINGS_LAYER,
-          type: "fill-extrusion",
-          source: BUILDINGS_SOURCE,
-          paint: {
-            "fill-extrusion-color": "#2563eb",
-            "fill-extrusion-height": ["coalesce", ["get", "heightMeters"], 10],
-            "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 0.85,
-          },
-        });
-        map.addLayer({
-          id: BUILDINGS_OUTLINE_LAYER,
-          type: "line",
-          source: BUILDINGS_SOURCE,
-          paint: {
-            "line-color": "#111827",
-            "line-width": 1,
-          },
-        });
-
-        map.on("mouseenter", BUILDINGS_LAYER, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", BUILDINGS_LAYER, () => {
-          map.getCanvas().style.cursor = "";
-        });
-      }
-    });
-
     mapRef.current = map;
     return () => {
       map.remove();
@@ -182,11 +147,46 @@ export function PortfolioMap({
   }, [projects]);
 
   // Sync the buildings extrusion source whenever the buildings prop changes.
+  // The source + layer are created on first sync (idempotently) so we don't
+  // race the map's "load" event.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     const apply = () => {
+      if (!map.getSource(BUILDINGS_SOURCE)) {
+        map.addSource(BUILDINGS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: BUILDINGS_LAYER,
+          type: "fill-extrusion",
+          source: BUILDINGS_SOURCE,
+          paint: {
+            "fill-extrusion-color": ["coalesce", ["get", "color"], "#2563eb"],
+            "fill-extrusion-height": ["coalesce", ["get", "heightMeters"], 10],
+            "fill-extrusion-base": 0,
+            "fill-extrusion-opacity": 0.85,
+          },
+        });
+        map.addLayer({
+          id: BUILDINGS_OUTLINE_LAYER,
+          type: "line",
+          source: BUILDINGS_SOURCE,
+          paint: {
+            "line-color": "#111827",
+            "line-width": 1.5,
+          },
+        });
+        map.on("mouseenter", BUILDINGS_LAYER, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", BUILDINGS_LAYER, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      }
+
       const source = map.getSource(BUILDINGS_SOURCE) as
         | mapboxgl.GeoJSONSource
         | undefined;
@@ -200,6 +200,7 @@ export function PortfolioMap({
             id: b.id,
             code: b.code,
             heightMeters: (b.heightFt ?? 30) * 0.3048,
+            ...(b.color ? { color: b.color } : {}),
           },
         })),
       });

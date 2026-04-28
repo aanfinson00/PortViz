@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { api } from "@/lib/trpc/react";
 
 export default function SettingsPage() {
@@ -19,9 +19,7 @@ export default function SettingsPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col px-6 py-8">
-      <Link href="/app" className="text-sm text-blue-600 hover:underline">
-        ← Back to portfolio
-      </Link>
+      <Breadcrumb crumbs={[{ label: "Settings" }]} />
 
       <h1 className="mt-4 text-3xl font-bold tracking-tight">Settings</h1>
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useState } from "react";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { DocumentUpload } from "@/components/docs/DocumentUpload";
 import { LeaseForm } from "@/components/lease/LeaseForm";
 import { api } from "@/lib/trpc/react";
@@ -35,12 +36,19 @@ export default function SpaceDetailPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-8">
-      <Link
-        href={`/app/projects/${projectCode.toUpperCase()}/buildings/${buildingCode.toUpperCase()}`}
-        className="text-sm text-blue-600 hover:underline"
-      >
-        ← {projectCode.toUpperCase()}-{buildingCode.toUpperCase()}
-      </Link>
+      <Breadcrumb
+        crumbs={[
+          {
+            label: projectCode.toUpperCase(),
+            href: `/app/projects/${projectCode.toUpperCase()}`,
+          },
+          {
+            label: buildingCode.toUpperCase(),
+            href: `/app/projects/${projectCode.toUpperCase()}/buildings/${buildingCode.toUpperCase()}`,
+          },
+          { label: spaceCode.toUpperCase() },
+        ]}
+      />
 
       {query.isLoading && (
         <p className="mt-8 text-sm text-neutral-500">Loading space…</p>

@@ -10,6 +10,7 @@ import { documentRouter } from "./routers/document";
 import { orgRouter } from "./routers/org";
 import { shareRouter } from "./routers/share";
 import { authRouter } from "./routers/auth";
+import { searchRouter } from "./routers/search";
 
 export const appRouter = router({
   auth: authRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
   document: documentRouter,
   org: orgRouter,
   share: shareRouter,
+  search: searchRouter,
 });
 
 export type AppRouter = typeof appRouter;

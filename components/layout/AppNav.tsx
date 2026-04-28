@@ -39,6 +39,9 @@ export function AppNav() {
           </Link>
         );
       })}
+      <span className="ml-2 hidden items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-mono text-[11px] text-neutral-500 md:inline-flex">
+        ⌘K to search
+      </span>
       <button
         onClick={handleSignOut}
         className="ml-1 rounded-md px-2.5 py-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"

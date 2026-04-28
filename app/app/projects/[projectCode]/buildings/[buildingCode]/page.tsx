@@ -2,6 +2,7 @@
 
 import type { Polygon } from "geojson";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useMemo, useState } from "react";
 import {
   BayQuickSetup,
@@ -13,6 +14,8 @@ import {
   BuildingExtrusionMap,
   type BuildingGeom,
 } from "@/components/map/BuildingExtrusionMap";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide, SpaceGroup } from "@/lib/demising";
 import { splitFootprintIntoBays } from "@/lib/geometry";
 import { api } from "@/lib/trpc/react";
@@ -34,7 +37,18 @@ export default function BuildingDetailPage({
 }: {
   params: Promise<{ projectCode: string; buildingCode: string }>;
 }) {
+  const router = useRouter();
   const { projectCode, buildingCode } = use(params);
+  const utils = api.useUtils();
+  const remove = api.building.delete.useMutation({
+    onSuccess: async () => {
+      await utils.building.listByProject.invalidate();
+      toastSuccess("Building deleted");
+      router.push(`/app/projects/${projectCode.toUpperCase()}`);
+      router.refresh();
+    },
+    onError: (e) => toastError(e.message),
+  });
   const query = api.building.byCompositeId.useQuery(
     {
       projectCode: projectCode.toUpperCase(),
@@ -167,14 +181,21 @@ export default function BuildingDetailPage({
     <main className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-4">
         <div>
-          {project && (
-            <Link
-              href={`/app/projects/${project.code}`}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              ← {project.code}
-            </Link>
-          )}
+          <Breadcrumb
+            crumbs={
+              project
+                ? [
+                    {
+                      label: project.code,
+                      href: `/app/projects/${project.code}`,
+                    },
+                    {
+                      label: building?.code ?? buildingCode.toUpperCase(),
+                    },
+                  ]
+                : []
+            }
+          />
           <h1 className="mt-1 text-lg font-semibold">
             {project?.code}
             {building?.code ? `-${building.code}` : ""}
@@ -193,13 +214,24 @@ export default function BuildingDetailPage({
           )}
         </div>
         <div className="flex gap-2">
-          <button
-            disabled
-            className="rounded-md bg-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-500"
-            title="Demising editor lands in Phase 4"
-          >
-            Demising editor
-          </button>
+          {building && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  confirm(
+                    `Delete ${project?.code}-${building.code}? This removes its bays, spaces, leases, and document records. Cannot be undone.`,
+                  )
+                ) {
+                  remove.mutate({ id: building.id });
+                }
+              }}
+              disabled={remove.isPending}
+              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {remove.isPending ? "Deleting…" : "Delete building"}
+            </button>
+          )}
         </div>
       </header>
 

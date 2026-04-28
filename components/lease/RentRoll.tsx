@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SpaceStatusChip } from "@/components/lease/SpaceStatusChip";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { api } from "@/lib/trpc/react";
 
@@ -146,7 +147,13 @@ export function RentRoll({ buildingId, projectCode, buildingCode }: RentRollProp
                     ? `$${lease.base_rent_psf}`
                     : <span className="text-neutral-400">—</span>}
                 </td>
-                <td className="px-4 py-2 capitalize">{s.status}</td>
+                <td className="px-4 py-2">
+                  <SpaceStatusChip
+                    spaceId={s.id}
+                    status={s.status}
+                    buildingId={buildingId}
+                  />
+                </td>
                 <td className="px-4 py-2 text-right">
                   <Link
                     href={`/app/projects/${projectCode}/buildings/${buildingCode}/spaces/${s.code}`}

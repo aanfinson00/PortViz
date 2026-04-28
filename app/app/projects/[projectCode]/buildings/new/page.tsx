@@ -4,7 +4,9 @@ import type { Polygon } from "geojson";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { FootprintEditor } from "@/components/map/FootprintEditor";
+import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import { api } from "@/lib/trpc/react";
 
 export default function NewBuildingPage({
@@ -22,8 +24,10 @@ export default function NewBuildingPage({
   const create = api.building.create.useMutation({
     onSuccess: async (b) => {
       await utils.building.listByProject.invalidate();
+      toastSuccess(`Created building ${projectCode.toUpperCase()}-${b.code}`);
       router.push(`/app/projects/${projectCode.toUpperCase()}/buildings/${b.code}`);
     },
+    onError: (e) => toastError(e.message),
   });
 
   const [code, setCode] = useState("");
@@ -59,12 +63,15 @@ export default function NewBuildingPage({
     <main className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-4">
         <div>
-          <Link
-            href={`/app/projects/${projectCode.toUpperCase()}`}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            ← {projectCode.toUpperCase()}
-          </Link>
+          <Breadcrumb
+            crumbs={[
+              {
+                label: projectCode.toUpperCase(),
+                href: `/app/projects/${projectCode.toUpperCase()}`,
+              },
+              { label: "New building" },
+            ]}
+          />
           <h1 className="mt-1 text-lg font-semibold">New building</h1>
           <p className="text-sm text-neutral-500">
             Draw the footprint on the map, then enter the height and SF.
