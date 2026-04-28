@@ -115,13 +115,20 @@ export const buildingRouter = router({
         return (first.data ?? []) as unknown as ListForMapRow[];
       }
 
-      // PGRST204 = PostgREST "column does not exist" surface; 42703 is the
-      // raw Postgres SQLSTATE. Treat both as "migration not applied yet"
-      // and degrade gracefully rather than failing the whole dashboard.
+      // Postgres 42703 is the raw "column does not exist" SQLSTATE. PostgREST
+      // surfaces missing-column problems either with code PGRST204 / PGRST116
+      // and a "schema cache" message ("Could not find the X column of Y in
+      // the schema cache"), or with the underlying 42703 when caching is
+      // off. We treat any of these as "migration not applied yet" and
+      // degrade gracefully rather than failing the whole dashboard.
+      const msg = first.error.message ?? "";
       const looksLikeMissingColumn =
         first.error.code === "42703" ||
         first.error.code === "PGRST204" ||
-        /column .* does not exist/i.test(first.error.message);
+        first.error.code === "PGRST116" ||
+        /column .* does not exist/i.test(msg) ||
+        /could not find .* column/i.test(msg) ||
+        /schema cache/i.test(msg);
       if (!looksLikeMissingColumn) throw first.error;
 
       const fallback = await tryQuery(core);

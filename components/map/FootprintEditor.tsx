@@ -6,6 +6,7 @@ import type { Polygon } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef } from "react";
+import { squareOffPolygonLngLat } from "@/lib/squareOffLngLat";
 
 interface FootprintEditorProps {
   center: [number, number];
@@ -68,7 +69,34 @@ export function FootprintEditor({ center, value, onChange }: FootprintEditorProp
       onChangeRef.current(polygon ?? null);
     };
 
-    map.on("draw.create", emit);
+    // On create only: snap near-90° corners (within ±10°) to true right
+    // angles. Industrial buildings are overwhelmingly rectilinear, and
+    // freehand satellite tracing produces wobbly outlines. Subsequent
+    // user edits via draw.update are preserved as-is so manual tweaks
+    // aren't clobbered.
+    const snapOnCreate = (e: { features: Array<{ id: string; geometry: { type: string } }> }) => {
+      const f = e.features?.[0];
+      if (!f || f.geometry.type !== "Polygon") {
+        emit();
+        return;
+      }
+      const fc = draw.getAll();
+      const feature = fc.features.find((x) => x.id === f.id);
+      if (!feature || feature.geometry.type !== "Polygon") {
+        emit();
+        return;
+      }
+      const snapped = squareOffPolygonLngLat(feature.geometry as Polygon, 10);
+      draw.add({
+        type: "Feature",
+        id: f.id,
+        geometry: snapped,
+        properties: feature.properties ?? {},
+      });
+      onChangeRef.current(snapped);
+    };
+
+    map.on("draw.create", snapOnCreate);
     map.on("draw.update", emit);
     map.on("draw.delete", emit);
 
