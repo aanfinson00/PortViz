@@ -16,6 +16,7 @@ import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide } from "@/lib/demising";
 import {
   computePropertyMetrics,
+  spaceSf,
   type BuildingForMetrics,
 } from "@/lib/propertyMetrics";
 import { api } from "@/lib/trpc/react";
@@ -40,6 +41,7 @@ type MapBuildingRow = {
     id: string;
     code: string;
     status: string;
+    target_sf: number | null;
     space_bay: Array<{ bay_id: string }>;
   }>;
 };
@@ -130,7 +132,7 @@ export default function ProjectDetailPage({
       })),
       spaces: b.space.map((s) => ({
         id: s.id,
-        targetSf: null, // target_sf would require joining the column; v1 uses computed
+        targetSf: s.target_sf,
         bayIds: s.space_bay.map((sb) => sb.bay_id),
       })),
     }));
@@ -170,7 +172,7 @@ export default function ProjectDetailPage({
           id: s.id,
           code: s.code,
           status: s.status,
-          targetSf: null,
+          targetSf: s.target_sf,
           bayIds: s.space_bay.map((sb) => sb.bay_id),
           tenantColor: tenant?.brand_color ?? null,
           tenantName: tenant?.name ?? null,
@@ -201,13 +203,9 @@ export default function ProjectDetailPage({
       }
     >();
     for (const card of cards) {
-      const bayById = new Map(card.bays.map((b) => [b.id, b]));
       for (const s of card.spaces) {
         if (!s.tenantName) continue;
-        const sf = s.bayIds.reduce((sum, id) => {
-          const bay = bayById.get(id);
-          return bay ? sum + bay.widthFt * bay.depthFt : sum;
-        }, 0);
+        const sf = spaceSf(s, card.bays);
         const lease = activeLeases.find((l) => l.space_id === s.id);
         const tenant = lease ? firstTenant(lease.tenant) : null;
         if (!tenant) continue;

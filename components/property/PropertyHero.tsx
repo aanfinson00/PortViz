@@ -42,17 +42,36 @@ export function PropertyHero({ buildings, fallbackCenter }: PropertyHeroProps) {
     [buildings],
   );
 
+  // Union bbox across every building's footprint. Powers fitBounds so multi-
+  // building properties don't hide buildings 2..N off-screen.
+  const bounds = useMemo<[[number, number], [number, number]] | null>(() => {
+    if (mapBuildings.length === 0) return null;
+    let w = Infinity;
+    let s = Infinity;
+    let e = -Infinity;
+    let n = -Infinity;
+    for (const b of mapBuildings) {
+      for (const ring of b.footprint!.coordinates) {
+        for (const [x, y] of ring) {
+          if (x < w) w = x;
+          if (x > e) e = x;
+          if (y < s) s = y;
+          if (y > n) n = y;
+        }
+      }
+    }
+    return Number.isFinite(w) ? [[w, s], [e, n]] : null;
+  }, [mapBuildings]);
+
   const center = useMemo<[number, number] | null>(() => {
-    if (mapBuildings.length > 0) {
-      const ring = mapBuildings[0]!.footprint!.coordinates[0]!;
-      const sum = ring.reduce(
-        (acc, [x, y]) => [acc[0] + x, acc[1] + y] as [number, number],
-        [0, 0] as [number, number],
-      );
-      return [sum[0] / ring.length, sum[1] / ring.length];
+    if (bounds) {
+      return [
+        (bounds[0][0] + bounds[1][0]) / 2,
+        (bounds[0][1] + bounds[1][1]) / 2,
+      ];
     }
     return fallbackCenter ?? null;
-  }, [mapBuildings, fallbackCenter]);
+  }, [bounds, fallbackCenter]);
 
   if (!center) {
     return (
@@ -65,7 +84,11 @@ export function PropertyHero({ buildings, fallbackCenter }: PropertyHeroProps) {
 
   return (
     <div className="h-72 w-full overflow-hidden rounded-md border border-neutral-200">
-      <BuildingExtrusionMap center={center} buildings={mapBuildings} />
+      <BuildingExtrusionMap
+        center={center}
+        buildings={mapBuildings}
+        bounds={bounds}
+      />
     </div>
   );
 }

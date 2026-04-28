@@ -25,6 +25,11 @@ interface BuildingExtrusionMapProps {
   onSelectBuilding?: (id: string) => void;
   /** Initial pitch in degrees for the 3D view. Default 55. */
   pitch?: number;
+  /**
+   * Optional [[w,s],[e,n]] bounds. When set, the map fitBounds()s on load
+   * (and when the bounds change) so multiple buildings stay in frame.
+   */
+  bounds?: [[number, number], [number, number]] | null;
 }
 
 export function BuildingExtrusionMap({
@@ -33,6 +38,7 @@ export function BuildingExtrusionMap({
   selectedBuildingId,
   onSelectBuilding,
   pitch = 55,
+  bounds = null,
 }: BuildingExtrusionMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -110,6 +116,10 @@ export function BuildingExtrusionMap({
       map.on("mouseleave", LAYER_ID, () => {
         map.getCanvas().style.cursor = "";
       });
+
+      if (bounds) {
+        map.fitBounds(bounds, { padding: 48, maxZoom: 18, duration: 0 });
+      }
     });
 
     mapRef.current = map;
@@ -117,7 +127,17 @@ export function BuildingExtrusionMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [center, pitch]);
+  }, [center, pitch, bounds]);
+
+  // Re-fit when bounds change after mount (e.g. a building is added).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bounds) return;
+    const fit = () =>
+      map.fitBounds(bounds, { padding: 48, maxZoom: 18, duration: 400 });
+    if (map.isStyleLoaded()) fit();
+    else map.once("load", fit);
+  }, [bounds]);
 
   // Sync buildings into the source when the data changes.
   useEffect(() => {

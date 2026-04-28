@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { rankFuzzy } from "@/lib/fuzzy";
 import { api } from "@/lib/trpc/react";
 
 type Item = {
@@ -20,51 +21,6 @@ const TYPE_LABELS: Record<Item["type"], string> = {
   space: "Space",
   tenant: "Tenant",
 };
-
-/**
- * Tiny fuzzy match: every char of the query must appear in order somewhere in
- * the haystack (case-insensitive). Score is the inverse of the gap span +
- * a bonus for prefix matches and for shorter haystacks. Good enough for an
- * org-sized index of a few thousand items.
- */
-function fuzzyScore(query: string, hay: string): number | null {
-  if (!query) return 0;
-  const q = query.toLowerCase();
-  const h = hay.toLowerCase();
-  let qi = 0;
-  let firstHit = -1;
-  let lastHit = -1;
-  for (let i = 0; i < h.length && qi < q.length; i++) {
-    if (h[i] === q[qi]) {
-      if (firstHit < 0) firstHit = i;
-      lastHit = i;
-      qi++;
-    }
-  }
-  if (qi < q.length) return null;
-  // Lower (= better) score is better. Smaller span and earlier start win.
-  const span = lastHit - firstHit;
-  const prefixBonus = h.startsWith(q) ? -50 : 0;
-  return span + firstHit + prefixBonus + h.length * 0.01;
-}
-
-function rank(items: Item[], query: string): Item[] {
-  if (!query) return items.slice(0, 50);
-  return items
-    .map((it) => {
-      const a = fuzzyScore(query, it.label);
-      const b = fuzzyScore(query, it.code);
-      const c = it.sublabel ? fuzzyScore(query, it.sublabel) : null;
-      const scores = [a, b, c].filter((s): s is number => s !== null);
-      return scores.length === 0
-        ? null
-        : { item: it, score: Math.min(...scores) };
-    })
-    .filter((x): x is { item: Item; score: number } => x !== null)
-    .sort((a, b) => a.score - b.score)
-    .slice(0, 50)
-    .map((x) => x.item);
-}
 
 export function CommandPalette() {
   const router = useRouter();
@@ -107,7 +63,11 @@ export function CommandPalette() {
   });
 
   const items = (search.data ?? []) as Item[];
-  const ranked = useMemo(() => rank(items, query), [items, query]);
+  const ranked = useMemo(
+    () =>
+      rankFuzzy(items, query, (it) => [it.label, it.code, it.sublabel ?? null]),
+    [items, query],
+  );
 
   // Clamp the active index when the result list changes.
   useEffect(() => {

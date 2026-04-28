@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
+import { addMonthsMinusDay } from "@/lib/leaseDate";
 import { api } from "@/lib/trpc/react";
 
 interface LeaseFormProps {
@@ -38,19 +39,14 @@ export function LeaseForm({ spaceId, onCreated }: LeaseFormProps) {
   const [commissionPsf, setCommissionPsf] = useState("");
   const [securityDeposit, setSecurityDeposit] = useState("");
   const [notes, setNotes] = useState("");
+  // Once the user manually edits the end date, stop auto-overwriting it on
+  // start/term changes. Clearing the field re-arms the auto-compute.
+  const [endDateDirty, setEndDateDirty] = useState(false);
 
-  // Auto-compute end date when start + term are both set, unless the user has
-  // already typed an end date.
   function syncEndDate(start: string, term: string) {
-    if (!start || !term) return;
-    const months = Number(term);
-    if (!Number.isFinite(months) || months <= 0) return;
-    const d = new Date(start);
-    if (Number.isNaN(d.getTime())) return;
-    d.setMonth(d.getMonth() + months);
-    // End is the day before the term completes (typical lease convention).
-    d.setDate(d.getDate() - 1);
-    setEndDate(d.toISOString().slice(0, 10));
+    if (endDateDirty) return;
+    const next = addMonthsMinusDay(start, term);
+    if (next) setEndDate(next);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -122,7 +118,12 @@ export function LeaseForm({ spaceId, onCreated }: LeaseFormProps) {
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              // Cleared field re-arms auto-compute; any other edit "dirties"
+              // the field so start/term changes won't clobber it.
+              setEndDateDirty(e.target.value !== "");
+            }}
             required
             className={inputClass}
           />

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { TRPCReactProvider } from "@/lib/trpc/react";
-import { CommandPalette } from "@/components/layout/CommandPalette";
 import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
 
@@ -20,7 +19,6 @@ export default function RootLayout({
       <body>
         <TRPCReactProvider>
           {children}
-          <CommandPalette />
           <Toaster />
         </TRPCReactProvider>
       </body>

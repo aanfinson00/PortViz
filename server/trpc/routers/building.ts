@@ -63,7 +63,7 @@ export const buildingRouter = router({
         .select(
           `id, code, name, footprint_geojson, height_ft,
            bay (id, ordinal, width_ft, depth_ft, dock_door_count, drive_in_count, has_yard_access, frontage_side),
-           space (id, code, status, space_bay (bay_id))`,
+           space (id, code, status, target_sf, space_bay (bay_id))`,
         )
         .eq("org_id", ctx.orgId)
         .eq("project_id", input.projectId)
