@@ -43,7 +43,10 @@ export default function BuildingDetailPage({
   const utils = api.useUtils();
   const remove = api.building.delete.useMutation({
     onSuccess: async () => {
-      await utils.building.listByProject.invalidate();
+      await Promise.all([
+        utils.building.listByProject.invalidate(),
+        utils.building.listForMap.invalidate(),
+      ]);
       toastSuccess("Building deleted");
       router.push(`/app/projects/${projectCode.toUpperCase()}`);
       router.refresh();

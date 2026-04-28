@@ -313,6 +313,34 @@ export default function ProjectDetailPage({
         </p>
       )}
 
+      {/* Surface secondary-query errors so silent failures (e.g. a missing
+          migration breaking listForMap) don't show up as a blank dashboard. */}
+      {(buildingsQuery.isError ||
+        buildingsListQuery.isError ||
+        leasesQuery.isError) && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">Some property data couldn&rsquo;t load.</p>
+          <ul className="mt-1 list-disc pl-5 text-xs">
+            {buildingsQuery.isError && (
+              <li>
+                Buildings (with bays + spaces): {buildingsQuery.error.message}
+              </li>
+            )}
+            {buildingsListQuery.isError && (
+              <li>Buildings (summary): {buildingsListQuery.error.message}</li>
+            )}
+            {leasesQuery.isError && (
+              <li>Active leases: {leasesQuery.error.message}</li>
+            )}
+          </ul>
+          <p className="mt-2 text-xs">
+            If you recently pulled changes, apply pending Supabase migrations
+            (e.g. <code>supabase/migrations/0005_*</code>,{" "}
+            <code>0006_*</code>) and reload.
+          </p>
+        </div>
+      )}
+
       {project.data === null && (
         <p className="text-sm text-neutral-500">
           No project with code{" "}
