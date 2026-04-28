@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useShortcutLabel } from "@/components/layout/useShortcutLabel";
 import { rankFuzzy } from "@/lib/fuzzy";
 import { api } from "@/lib/trpc/react";
 
@@ -24,6 +25,7 @@ const TYPE_LABELS: Record<Item["type"], string> = {
 
 export function CommandPalette() {
   const router = useRouter();
+  const shortcut = useShortcutLabel("K");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -160,7 +162,7 @@ export function CommandPalette() {
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 bg-neutral-50 px-3 py-1.5 text-[11px] text-neutral-500">
           <span>↑↓ navigate · Enter to open · Esc to close</span>
-          <span className="font-mono">⌘K</span>
+          <span className="font-mono">{shortcut}</span>
         </div>
       </div>
     </div>
