@@ -9,6 +9,7 @@ import {
   DemisingEditor,
   spaceColor,
 } from "@/components/demising/DemisingEditor";
+import { SliderDemisingEditor } from "@/components/demising/SliderDemisingEditor";
 import { RentRoll } from "@/components/lease/RentRoll";
 import {
   BuildingExtrusionMap,
@@ -18,6 +19,15 @@ import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { AmenitiesPanel } from "@/components/property/amenities/AmenitiesPanel";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide, SpaceGroup } from "@/lib/demising";
+import {
+  sliceFootprintByArea,
+  type FrontageAxis,
+} from "@/lib/footprintSlicer";
+import { polygonAreaSqFt } from "@/lib/polygonArea";
+import {
+  resolveSpaces,
+  type SliderSpace,
+} from "@/lib/sliderDemising";
 import { splitFootprintIntoBays } from "@/lib/geometry";
 import { api } from "@/lib/trpc/react";
 
@@ -121,6 +131,19 @@ export default function BuildingDetailPage({
   const handleGroupsChange = useCallback((next: SpaceGroup[]) => {
     setGroups(next);
   }, []);
+  // Live slider-mode preview: SliderDemisingEditor publishes its current
+  // space layout up to here so the building map can render slabs on the
+  // fly while the user is dragging walls (before Save).
+  const [sliderSpaces, setSliderSpaces] = useState<SliderSpace[]>([]);
+  const handleSliderChange = useCallback((next: SliderSpace[]) => {
+    setSliderSpaces(next);
+  }, []);
+
+  const demisingMode: "bays" | "sliders" =
+    ((building as { demising_mode?: string } | undefined)?.demising_mode ===
+    "sliders"
+      ? "sliders"
+      : "bays") as "bays" | "sliders";
 
   const footprint: Polygon | null = useMemo(() => {
     const fp = building?.footprint_geojson;
@@ -140,14 +163,45 @@ export default function BuildingDetailPage({
     return splitFootprintIntoBays(footprint, bays, frontage);
   }, [footprint, bays]);
 
+  const totalSfFromPolygon = useMemo(
+    () => (footprint ? polygonAreaSqFt(footprint) : 0),
+    [footprint],
+  );
+
   const mapBuildings: BuildingGeom[] = useMemo(() => {
     if (!building || !footprint) return [];
+    const heightFt = building.height_ft ? Number(building.height_ft) : null;
 
-    // If we have bays and demising groups, render one extrusion per bay
-    // colored by its owning space. Otherwise fall back to the single
-    // footprint extrusion.
-    if (bays.length > 0 && groups.length > 0 && Object.keys(bayPolygons).length > 0) {
-      const heightFt = building.height_ft ? Number(building.height_ft) : null;
+    // Slider mode: slice the footprint by the current resolved space SFs
+    // (live, even before save) and color each slab by its space ordinal.
+    if (demisingMode === "sliders" && sliderSpaces.length > 0) {
+      const resolved = resolveSpaces(sliderSpaces, totalSfFromPolygon);
+      // Frontage defaults to South when there are no bays — matches the
+      // amenity layer default.
+      const frontage: FrontageAxis =
+        ((bays[0]?.frontageSide as FrontageAxis | undefined) ?? "S");
+      const slabs = sliceFootprintByArea(
+        footprint,
+        frontage,
+        resolved.map((r) => r.sf),
+      );
+      return resolved.map((r, i) => ({
+        id: `slab-${r.id}`,
+        code: `slab-${i}`,
+        name: `Space ${i + 1}`,
+        footprint: slabs[i] ?? footprint,
+        heightFt,
+        color: spaceColor(i),
+      }));
+    }
+
+    // Legacy bay mode: one extrusion per bay colored by its owning space.
+    if (
+      demisingMode === "bays" &&
+      bays.length > 0 &&
+      groups.length > 0 &&
+      Object.keys(bayPolygons).length > 0
+    ) {
       const bayIdToGroupIndex = new Map<string, number>();
       groups.forEach((g, i) => {
         for (const id of g.bayIds) bayIdToGroupIndex.set(id, i);
@@ -175,11 +229,20 @@ export default function BuildingDetailPage({
         code: building.code,
         name: building.name,
         footprint,
-        heightFt: building.height_ft ? Number(building.height_ft) : null,
+        heightFt,
         color: "#2563eb",
       },
     ];
-  }, [building, footprint, bays, groups, bayPolygons]);
+  }, [
+    building,
+    footprint,
+    bays,
+    groups,
+    bayPolygons,
+    demisingMode,
+    sliderSpaces,
+    totalSfFromPolygon,
+  ]);
 
   return (
     <main className="flex h-screen flex-col">
@@ -249,11 +312,40 @@ export default function BuildingDetailPage({
       {building && (
         <section className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[360px_1fr]">
           <aside className="overflow-y-auto border-r border-neutral-200 bg-white p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-              Demising
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                Demising
+              </h2>
+              <ModeToggle
+                buildingId={building.id}
+                mode={demisingMode}
+              />
+            </div>
 
-            {bays.length === 0 ? (
+            {demisingMode === "sliders" ? (
+              <div className="mt-3">
+                <SliderDemisingEditor
+                  buildingId={building.id}
+                  totalSf={Math.round(totalSfFromPolygon)}
+                  initialSpaces={(spacesQuery.data ?? []).map(
+                    (s: {
+                      id: string;
+                      code: string;
+                      position_order: number | null;
+                      target_sf: number | null;
+                      is_pinned: boolean | null;
+                    }) => ({
+                      id: s.id,
+                      code: s.code,
+                      position_order: s.position_order,
+                      target_sf: s.target_sf,
+                      is_pinned: s.is_pinned,
+                    }),
+                  )}
+                  onChange={handleSliderChange}
+                />
+              </div>
+            ) : bays.length === 0 ? (
               <div className="mt-3">
                 <BayQuickSetup buildingId={building.id} />
               </div>
@@ -356,5 +448,44 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
       <dt className="text-xs uppercase tracking-wide text-neutral-500">{label}</dt>
       <dd className="font-medium">{value}</dd>
     </div>
+  );
+}
+
+/**
+ * Compact toggle that flips a building between bay-based and slider-based
+ * demising. The mutation is best-effort; on success, the parent page
+ * refetches via byCompositeId invalidation and re-renders the right
+ * editor for the new mode.
+ */
+function ModeToggle({
+  buildingId,
+  mode,
+}: {
+  buildingId: string;
+  mode: "bays" | "sliders";
+}) {
+  const utils = api.useUtils();
+  const setMode = api.building.setDemisingMode.useMutation({
+    onSuccess: async () => {
+      await utils.building.byCompositeId.invalidate();
+      toastSuccess(`Switched to ${mode === "bays" ? "slider" : "bay"} mode`);
+    },
+    onError: (e) => toastError(e.message),
+  });
+  const next = mode === "bays" ? "sliders" : "bays";
+  return (
+    <button
+      type="button"
+      onClick={() => setMode.mutate({ id: buildingId, mode: next })}
+      disabled={setMode.isPending}
+      className="rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-[10px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+      title={`Switch to ${next} mode`}
+    >
+      {setMode.isPending
+        ? "…"
+        : mode === "sliders"
+          ? "Sliders ▾"
+          : "Bays ▾"}
+    </button>
   );
 }

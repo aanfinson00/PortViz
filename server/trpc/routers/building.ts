@@ -264,6 +264,52 @@ export const buildingRouter = router({
       return { ok: true };
     }),
 
+  /**
+   * Switch a building between bay-based and slider-based demising. Doesn't
+   * touch the underlying data — the relevant editor on the building detail
+   * page reads/writes the right shape based on this flag.
+   */
+  setDemisingMode: editorProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        mode: z.enum(["bays", "sliders"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("building")
+        .update({ demising_mode: input.mode })
+        .eq("id", input.id)
+        .eq("org_id", ctx.orgId);
+      if (error) {
+        const msg = error.message ?? "";
+        const isMissingColumn =
+          error.code === "42703" ||
+          error.code === "PGRST204" ||
+          error.code === "PGRST116" ||
+          /column .* does not exist/i.test(msg) ||
+          /could not find .* column/i.test(msg) ||
+          /schema cache/i.test(msg);
+        if (isMissingColumn) {
+          throw new Error(
+            "Slider demising requires migration 0010 in your Supabase. Apply supabase/migrations/0010_slider_demising.sql in the SQL editor, then try again. Original: " +
+              msg,
+          );
+        }
+        throw error;
+      }
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "building",
+        entityId: input.id,
+        kind: "demising_mode_changed",
+        payload: { mode: input.mode },
+      });
+      return { ok: true };
+    }),
+
   delete: editorProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
