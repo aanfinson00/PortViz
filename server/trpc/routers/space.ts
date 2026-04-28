@@ -131,6 +131,7 @@ export const spaceRouter = router({
             positionOrder: z.number().int().min(0),
             targetSf: z.number().int().min(0).nullable(),
             isPinned: z.boolean(),
+            officeDepthFt: z.number().int().min(0).max(2000).nullable(),
           }),
         ),
       }),
@@ -165,6 +166,7 @@ export const spaceRouter = router({
               position_order: s.positionOrder,
               target_sf: s.targetSf,
               is_pinned: s.isPinned,
+              office_depth_ft: s.officeDepthFt,
             })
             .select("id")
             .single();
@@ -178,6 +180,7 @@ export const spaceRouter = router({
               position_order: s.positionOrder,
               target_sf: s.targetSf,
               is_pinned: s.isPinned,
+              office_depth_ft: s.officeDepthFt,
             })
             .eq("id", s.id)
             .eq("org_id", ctx.orgId);

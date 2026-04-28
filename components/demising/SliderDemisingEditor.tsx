@@ -19,6 +19,15 @@ interface DbSpace {
   position_order: number | null;
   target_sf: number | null;
   is_pinned: boolean | null;
+  office_depth_ft: number | null;
+}
+
+/**
+ * Slider space + the office depth, threaded together so the parent page
+ * can render the office vs warehouse extrusions in real time.
+ */
+export interface EditableSpace extends SliderSpace {
+  officeDepthFt: number | null;
 }
 
 interface SliderDemisingEditorProps {
@@ -30,7 +39,13 @@ interface SliderDemisingEditorProps {
    * Notify the parent (building detail page) when the local space layout
    * changes — used to drive the live 3D preview on the building map.
    */
-  onChange?: (spaces: SliderSpace[]) => void;
+  onChange?: (spaces: EditableSpace[]) => void;
+  /**
+   * Per-space office and warehouse SF computed by the parent from the
+   * polygon slabs. Keyed by space id; the editor displays these as
+   * read-only readouts next to the office-depth input.
+   */
+  officeBreakdown?: Record<string, { officeSf: number; warehouseSf: number }>;
 }
 
 const TEMP_PREFIX = "new:";
@@ -53,11 +68,12 @@ export function SliderDemisingEditor({
   totalSf,
   initialSpaces,
   onChange,
+  officeBreakdown,
 }: SliderDemisingEditorProps) {
   const utils = api.useUtils();
   const tempCounterRef = useRef(0);
 
-  const initialSliderSpaces = useMemo<SliderSpace[]>(
+  const initialEditable = useMemo<EditableSpace[]>(
     () =>
       initialSpaces
         .map((s, i) => ({
@@ -65,21 +81,24 @@ export function SliderDemisingEditor({
           positionOrder: s.position_order ?? i,
           isPinned: s.is_pinned ?? false,
           targetSf: s.target_sf,
+          officeDepthFt: s.office_depth_ft,
         }))
         .sort((a, b) => a.positionOrder - b.positionOrder),
     [initialSpaces],
   );
 
-  const [spaces, setSpaces] = useState<SliderSpace[]>(initialSliderSpaces);
+  const [spaces, setSpaces] = useState<EditableSpace[]>(initialEditable);
   const [codes, setCodes] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialSpaces.map((s) => [s.id, s.code])),
   );
+  // Track which space rows have the office editor expanded.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   // Re-hydrate when initialSpaces lands asynchronously.
   useEffect(() => {
-    setSpaces(initialSliderSpaces);
+    setSpaces(initialEditable);
     setCodes(Object.fromEntries(initialSpaces.map((s) => [s.id, s.code])));
-  }, [initialSliderSpaces, initialSpaces]);
+  }, [initialEditable, initialSpaces]);
 
   useEffect(() => {
     onChange?.(spaces);
@@ -129,7 +148,7 @@ export function SliderDemisingEditor({
   function handleAddSpace() {
     setSpaces((prev) => {
       const newId = `${TEMP_PREFIX}${++tempCounterRef.current}`;
-      const next = splitLargest(prev, totalSf, newId);
+      const next = splitLargest(prev, totalSf, newId, { officeDepthFt: null });
       // Coin a new code for the new space — pick the next free numeric
       // suffix from the existing codes pool.
       const usedCodes = new Set(Object.values(codes));
@@ -137,6 +156,22 @@ export function SliderDemisingEditor({
       setCodes((c) => ({ ...c, [newId]: code }));
       return next;
     });
+  }
+
+  function handleOfficeDepthChange(id: string, value: string) {
+    const n =
+      value.trim() === ""
+        ? null
+        : Number.isFinite(Number(value))
+          ? Math.max(0, Math.round(Number(value)))
+          : null;
+    setSpaces((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, officeDepthFt: n } : s)),
+    );
+  }
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
   function handleRemove(id: string) {
@@ -186,6 +221,7 @@ export function SliderDemisingEditor({
         positionOrder: i,
         targetSf: s.isPinned ? s.targetSf : s.targetSf,
         isPinned: s.isPinned,
+        officeDepthFt: s.officeDepthFt ?? null,
       })),
     });
   }
@@ -241,67 +277,118 @@ export function SliderDemisingEditor({
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {resolved.map((r, i) => (
-            <li
-              key={r.id}
-              className="flex flex-wrap items-center gap-2 rounded-md border border-neutral-200 bg-white p-2 text-xs"
-            >
-              <span
-                aria-hidden
-                className="inline-block h-3 w-3 flex-shrink-0 rounded-sm"
-                style={{ background: spaceColor(i) }}
-              />
-              <input
-                type="text"
-                value={codes[r.id] ?? ""}
-                onChange={(e) =>
-                  setCodes((prev) => ({
-                    ...prev,
-                    [r.id]: e.target.value.toUpperCase(),
-                  }))
-                }
-                className="w-20 rounded border border-neutral-200 px-1.5 py-0.5 font-mono"
-                aria-label="Space code"
-              />
-              <input
-                type="number"
-                inputMode="numeric"
-                placeholder={`${Math.round(r.sf).toLocaleString()}`}
-                value={r.targetSf ?? ""}
-                onChange={(e) => handleSfChange(r.id, e.target.value)}
-                className="w-28 rounded border border-neutral-200 px-1.5 py-0.5 font-mono"
-                aria-label="Target SF"
-              />
-              <span className="text-neutral-500">
-                · {Math.round(r.sf).toLocaleString()} SF (
-                {(r.share * 100).toFixed(1)}%)
-              </span>
-              <button
-                type="button"
-                onClick={() => handlePinToggle(r.id)}
-                className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-medium ${
-                  r.isPinned
-                    ? "border-blue-300 bg-blue-50 text-blue-700"
-                    : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
-                }`}
-                title={
-                  r.isPinned
-                    ? "Pinned — adjacent walls won't slide"
-                    : "Click to pin this space's SF"
-                }
+          {resolved.map((r, i) => {
+            const isExpanded = expanded[r.id] ?? false;
+            const breakdown = officeBreakdown?.[r.id];
+            const officeSf = breakdown?.officeSf ?? 0;
+            const warehouseSf = breakdown?.warehouseSf ?? r.sf;
+            return (
+              <li
+                key={r.id}
+                className="flex flex-col gap-1 rounded-md border border-neutral-200 bg-white p-2 text-xs"
               >
-                {r.isPinned ? "📌 Pinned" : "Pin"}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRemove(r.id)}
-                className="rounded border border-red-200 bg-white px-1.5 py-0.5 text-red-700 hover:bg-red-50"
-                aria-label="Remove space"
-              >
-                ×
-              </button>
-            </li>
-          ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="inline-block h-3 w-3 flex-shrink-0 rounded-sm"
+                    style={{ background: spaceColor(i) }}
+                  />
+                  <input
+                    type="text"
+                    value={codes[r.id] ?? ""}
+                    onChange={(e) =>
+                      setCodes((prev) => ({
+                        ...prev,
+                        [r.id]: e.target.value.toUpperCase(),
+                      }))
+                    }
+                    className="w-20 rounded border border-neutral-200 px-1.5 py-0.5 font-mono"
+                    aria-label="Space code"
+                  />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder={`${Math.round(r.sf).toLocaleString()}`}
+                    value={r.targetSf ?? ""}
+                    onChange={(e) => handleSfChange(r.id, e.target.value)}
+                    className="w-28 rounded border border-neutral-200 px-1.5 py-0.5 font-mono"
+                    aria-label="Target SF"
+                  />
+                  <span className="text-neutral-500">
+                    · {Math.round(r.sf).toLocaleString()} SF (
+                    {(r.share * 100).toFixed(1)}%)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(r.id)}
+                    className="ml-auto rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 hover:bg-neutral-50"
+                    title={isExpanded ? "Hide office buildout" : "Show office buildout"}
+                  >
+                    {isExpanded ? "Office ▴" : "Office ▾"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePinToggle(r.id)}
+                    className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${
+                      r.isPinned
+                        ? "border-blue-300 bg-blue-50 text-blue-700"
+                        : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                    title={
+                      r.isPinned
+                        ? "Pinned — adjacent walls won't slide"
+                        : "Click to pin this space's SF"
+                    }
+                  >
+                    {r.isPinned ? "📌 Pinned" : "Pin"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(r.id)}
+                    className="rounded border border-red-200 bg-white px-1.5 py-0.5 text-red-700 hover:bg-red-50"
+                    aria-label="Remove space"
+                  >
+                    ×
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 pl-5 pt-1.5 text-[11px] text-neutral-600">
+                    <label className="flex items-center gap-1">
+                      <span className="text-neutral-500">Office depth</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={r.officeDepthFt ?? ""}
+                        onChange={(e) =>
+                          handleOfficeDepthChange(r.id, e.target.value)
+                        }
+                        className="w-16 rounded border border-neutral-200 px-1.5 py-0.5 font-mono"
+                      />
+                      <span className="text-neutral-500">ft</span>
+                    </label>
+                    {r.officeDepthFt && r.officeDepthFt > 0 ? (
+                      <span className="text-neutral-500">
+                        →{" "}
+                        <span className="font-medium text-neutral-800">
+                          {Math.round(officeSf).toLocaleString()}
+                        </span>{" "}
+                        office /{" "}
+                        <span className="font-medium text-neutral-800">
+                          {Math.round(warehouseSf).toLocaleString()}
+                        </span>{" "}
+                        warehouse
+                      </span>
+                    ) : (
+                      <span className="text-neutral-400">
+                        No office (full warehouse)
+                      </span>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

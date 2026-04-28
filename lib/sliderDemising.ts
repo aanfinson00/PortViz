@@ -42,11 +42,15 @@ export interface ResolvedSpace extends SliderSpace {
  * Resolve final SF for each space given the building total. Sum of
  * resolved SFs always equals totalSf (constraint enforced by collapsing
  * unpinned spaces or by trimming pins when over-allocated).
+ *
+ * Generic over T so callers can pass richer space shapes (e.g., the
+ * editor's EditableSpace with office_depth_ft) and get the extra fields
+ * back on each resolved row via spread.
  */
-export function resolveSpaces(
-  spaces: SliderSpace[],
+export function resolveSpaces<T extends SliderSpace>(
+  spaces: T[],
   totalSf: number,
-): ResolvedSpace[] {
+): Array<T & ResolvedSpace> {
   if (totalSf <= 0 || spaces.length === 0) {
     return spaces
       .slice()
@@ -138,12 +142,12 @@ export function resolveSpaces(
  * user wants the wall to slide further, they can drag again; pin status
  * gives them an exact SF readout).
  */
-export function dragWall(
-  spaces: SliderSpace[],
+export function dragWall<T extends SliderSpace>(
+  spaces: T[],
   wallIndex: number,
   deltaSf: number,
   totalSf: number,
-): SliderSpace[] {
+): T[] {
   const sorted = [...spaces].sort(
     (a, b) => a.positionOrder - b.positionOrder,
   );
@@ -180,20 +184,27 @@ export function dragWall(
  * Insert a new space by splitting the largest unpinned space (or the
  * largest space if all are pinned) into two equal halves. Returns the
  * new array; the new space gets a temporary id from `newId`.
+ *
+ * Generic so the new space inherits T's shape via the optional
+ * `extraFields` argument. Callers pass (e.g.) `{ officeDepthFt: null }`
+ * when their T has fields beyond SliderSpace.
  */
-export function splitLargest(
-  spaces: SliderSpace[],
+export function splitLargest<T extends SliderSpace>(
+  spaces: T[],
   totalSf: number,
   newId: string,
-): SliderSpace[] {
+  extraFields?: Omit<T, keyof SliderSpace>,
+): T[] {
+  const extras = (extraFields ?? {}) as Omit<T, keyof SliderSpace>;
   if (spaces.length === 0) {
     return [
       {
+        ...extras,
         id: newId,
         positionOrder: 0,
         isPinned: false,
         targetSf: null,
-      },
+      } as T,
     ];
   }
   const resolved = resolveSpaces(spaces, totalSf);
@@ -207,14 +218,15 @@ export function splitLargest(
   const half = Math.round(target.sf / 2);
 
   // Re-number positions: shift everything to the right of the split.
-  const newSpace: SliderSpace = {
+  const newSpace = {
+    ...extras,
     id: newId,
     positionOrder: target.positionOrder + 1,
     isPinned: target.isPinned,
     targetSf: target.isPinned ? half : null,
-  };
+  } as T;
 
-  const out: SliderSpace[] = [];
+  const out: T[] = [];
   for (let i = 0; i < sorted.length; i++) {
     const s = sorted[i]!;
     if (i === idx) {
@@ -235,7 +247,9 @@ export function splitLargest(
   return out;
 }
 
-function pickLargestSplittable(resolved: ResolvedSpace[]): ResolvedSpace | null {
+function pickLargestSplittable<T extends SliderSpace>(
+  resolved: Array<T & ResolvedSpace>,
+): (T & ResolvedSpace) | null {
   const unpinned = resolved.filter((s) => !s.isPinned);
   const pool = unpinned.length > 0 ? unpinned : resolved;
   if (pool.length === 0) return null;
@@ -244,10 +258,10 @@ function pickLargestSplittable(resolved: ResolvedSpace[]): ResolvedSpace | null 
 
 /** Remove a space; its SF flows to its neighbors (or just disappears if
  *  pinned siblings already account for the total). Returns the new array. */
-export function removeSpace(
-  spaces: SliderSpace[],
+export function removeSpace<T extends SliderSpace>(
+  spaces: T[],
   id: string,
-): SliderSpace[] {
+): T[] {
   const sorted = [...spaces].sort(
     (a, b) => a.positionOrder - b.positionOrder,
   );

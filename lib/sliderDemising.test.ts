@@ -124,7 +124,7 @@ describe("splitLargest", () => {
   });
 
   it("creates a single space from empty input", () => {
-    const out = splitLargest([], TOTAL, "new1");
+    const out = splitLargest([] as SliderSpace[], TOTAL, "new1");
     expect(out).toHaveLength(1);
     expect(out[0]?.id).toBe("new1");
   });
