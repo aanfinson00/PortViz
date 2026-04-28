@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/trpc/react";
 
 interface DocumentUploadProps {
-  entityType: "project" | "building" | "space" | "tenant";
+  entityType: "project" | "building" | "space" | "tenant" | "lease";
   entityId: string;
 }
 
@@ -14,6 +14,8 @@ const DOC_KINDS = [
   { value: "site_plan", label: "Site plan" },
   { value: "floor_plan", label: "Floor plan" },
   { value: "photo", label: "Photo" },
+  { value: "survey", label: "Survey" },
+  { value: "marketing", label: "Marketing" },
   { value: "other", label: "Other" },
 ] as const;
 

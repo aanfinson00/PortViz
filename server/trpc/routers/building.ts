@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import type { Polygon } from "geojson";
 import { z } from "zod";
 import { codeSchema } from "@/lib/codes";
+import { logEvent } from "../audit";
 import { editorProcedure, orgProcedure, router } from "../init";
 
 /** Row shape returned by listForMap — kept stable across the augmented and
@@ -201,6 +202,14 @@ export const buildingRouter = router({
         .select()
         .single();
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "building",
+        entityId: data.id,
+        kind: "created",
+        payload: { code: data.code, name: data.name },
+      });
       return data;
     }),
 
@@ -228,6 +237,14 @@ export const buildingRouter = router({
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "building",
+        entityId: input.id,
+        kind: "updated",
+        payload: { patch: { truck_court_depth_ft: input.truckCourtDepthFt } },
+      });
       return { ok: true };
     }),
 
@@ -252,6 +269,13 @@ export const buildingRouter = router({
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "building",
+        entityId: input.id,
+        kind: "deleted",
+      });
       return { ok: true };
     }),
 });

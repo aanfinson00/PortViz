@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logEvent } from "../audit";
 import { editorProcedure, orgProcedure, router } from "../init";
 
 const leaseInput = z.object({
@@ -113,6 +114,14 @@ export const leaseRouter = router({
       .select()
       .single();
     if (error) throw error;
+    await logEvent(ctx.supabase, {
+      orgId: ctx.orgId,
+      actorId: ctx.user.id,
+      entityType: "lease",
+      entityId: data.id,
+      kind: "created",
+      payload: { snapshot: data },
+    });
     return data;
   }),
 });

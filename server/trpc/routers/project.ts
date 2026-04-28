@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { codeSchema } from "@/lib/codes";
+import { logEvent } from "../audit";
 import { editorProcedure, orgProcedure, router } from "../init";
 
 const projectInput = z.object({
@@ -101,6 +102,14 @@ export const projectRouter = router({
         .select()
         .single();
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "project",
+        entityId: id,
+        kind: "updated",
+        payload: { patch },
+      });
       return data;
     }),
 
@@ -133,6 +142,14 @@ export const projectRouter = router({
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "project",
+        entityId: input.id,
+        kind: "amenities_updated",
+        payload: { patch },
+      });
       return { ok: true };
     }),
 
@@ -145,6 +162,13 @@ export const projectRouter = router({
         .eq("id", input.id)
         .eq("org_id", ctx.orgId);
       if (error) throw error;
+      await logEvent(ctx.supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.user.id,
+        entityType: "project",
+        entityId: input.id,
+        kind: "deleted",
+      });
       return { ok: true };
     }),
 });
