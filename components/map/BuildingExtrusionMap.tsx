@@ -3,11 +3,17 @@
 import type { Feature, FeatureCollection, Polygon } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const SOURCE_ID = "portviz-buildings";
 const LAYER_ID = "portviz-buildings-extrusion";
 const OUTLINE_LAYER_ID = "portviz-buildings-outline";
+
+const STYLES = {
+  light: "mapbox://styles/mapbox/light-v11",
+  satellite: "mapbox://styles/mapbox/satellite-streets-v12",
+} as const;
+export type MapStyleKey = keyof typeof STYLES;
 
 export interface BuildingGeom {
   id: string;
@@ -52,9 +58,12 @@ interface BuildingExtrusionMapProps {
   /**
    * Extra polygon layers to render alongside the buildings. Passed-through
    * data is re-applied whenever the array changes; layers with the same
-   * id are reused via setData() so rapid prop updates don't churn sources.
+   * id are reused via setData() so rapent prop updates don't churn sources.
    */
   overlayLayers?: OverlayLayer[];
+  /** Initial map style. The user can toggle between light and satellite via
+   *  the small overlay button regardless of this initial choice. */
+  initialStyle?: MapStyleKey;
 }
 
 export function BuildingExtrusionMap({
@@ -65,15 +74,35 @@ export function BuildingExtrusionMap({
   pitch = 55,
   bounds = null,
   overlayLayers,
+  initialStyle = "light",
 }: BuildingExtrusionMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const onSelectRef = useRef(onSelectBuilding);
+  const buildingsRef = useRef(buildings);
+  const selectedRef = useRef(selectedBuildingId);
+  const overlayLayersRef = useRef(overlayLayers);
+  const boundsRef = useRef(bounds);
+  const overlayIdsRef = useRef<Set<string>>(new Set());
+  const [styleKey, setStyleKey] = useState<MapStyleKey>(initialStyle);
 
   useEffect(() => {
     onSelectRef.current = onSelectBuilding;
   }, [onSelectBuilding]);
+  useEffect(() => {
+    buildingsRef.current = buildings;
+  }, [buildings]);
+  useEffect(() => {
+    selectedRef.current = selectedBuildingId;
+  }, [selectedBuildingId]);
+  useEffect(() => {
+    overlayLayersRef.current = overlayLayers;
+  }, [overlayLayers]);
+  useEffect(() => {
+    boundsRef.current = bounds;
+  }, [bounds]);
 
+  // Mount the map exactly once. Style swaps later via map.setStyle().
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -87,7 +116,7 @@ export function BuildingExtrusionMap({
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/light-v11",
+      style: STYLES[initialStyle],
       center,
       zoom: 17,
       pitch,
@@ -95,57 +124,82 @@ export function BuildingExtrusionMap({
       antialias: true,
     });
 
-    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(
+      new mapboxgl.NavigationControl({ visualizePitch: true }),
+      "top-right",
+    );
 
-    map.on("load", () => {
-      map.addSource(SOURCE_ID, {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-
-      map.addLayer({
-        id: LAYER_ID,
-        type: "fill-extrusion",
-        source: SOURCE_ID,
-        paint: {
-          "fill-extrusion-color": ["coalesce", ["get", "color"], "#2563eb"],
-          "fill-extrusion-height": ["coalesce", ["get", "heightMeters"], 10],
-          "fill-extrusion-base": 0,
-          "fill-extrusion-opacity": 0.85,
-        },
-      });
-
-      map.addLayer({
-        id: OUTLINE_LAYER_ID,
-        type: "line",
-        source: SOURCE_ID,
-        paint: {
-          "line-color": "#111827",
-          "line-width": [
-            "case",
-            ["==", ["get", "selected"], true],
-            3,
-            1,
-          ],
-        },
-      });
-
-      map.on("click", LAYER_ID, (e) => {
-        const feat = e.features?.[0];
-        const id = feat?.properties?.id as string | undefined;
-        if (id) onSelectRef.current?.(id);
-      });
-
-      map.on("mouseenter", LAYER_ID, () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-      map.on("mouseleave", LAYER_ID, () => {
-        map.getCanvas().style.cursor = "";
-      });
-
-      if (bounds) {
-        map.fitBounds(bounds, { padding: 48, maxZoom: 18, duration: 0 });
+    // setupLayers re-installs all custom sources + layers. Runs on every
+    // style.load (which fires both for the initial style and after each
+    // map.setStyle() call), so layers persist across satellite toggles.
+    const setupLayers = () => {
+      if (!map.getSource(SOURCE_ID)) {
+        map.addSource(SOURCE_ID, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
       }
+      if (!map.getLayer(LAYER_ID)) {
+        map.addLayer({
+          id: LAYER_ID,
+          type: "fill-extrusion",
+          source: SOURCE_ID,
+          paint: {
+            "fill-extrusion-color": ["coalesce", ["get", "color"], "#2563eb"],
+            "fill-extrusion-height": ["coalesce", ["get", "heightMeters"], 10],
+            "fill-extrusion-base": 0,
+            "fill-extrusion-opacity": 0.85,
+          },
+        });
+      }
+      if (!map.getLayer(OUTLINE_LAYER_ID)) {
+        map.addLayer({
+          id: OUTLINE_LAYER_ID,
+          type: "line",
+          source: SOURCE_ID,
+          paint: {
+            "line-color": "#111827",
+            "line-width": [
+              "case",
+              ["==", ["get", "selected"], true],
+              3,
+              1,
+            ],
+          },
+        });
+      }
+
+      // Re-apply current building features into the source.
+      applyBuildingFeatures(map, buildingsRef.current, selectedRef.current);
+
+      // Re-add overlay layers (style.setStyle wipes all custom layers).
+      overlayIdsRef.current.clear();
+      for (const layer of overlayLayersRef.current ?? []) {
+        applyOverlayLayer(map, layer, overlayIdsRef.current);
+      }
+
+      // Re-fit bounds if any.
+      if (boundsRef.current) {
+        map.fitBounds(boundsRef.current, {
+          padding: 48,
+          maxZoom: 18,
+          duration: 0,
+        });
+      }
+    };
+
+    map.on("style.load", setupLayers);
+
+    map.on("click", LAYER_ID, (e) => {
+      const feat = e.features?.[0];
+      const id = feat?.properties?.id as string | undefined;
+      if (id) onSelectRef.current?.(id);
+    });
+    map.on("mouseenter", LAYER_ID, () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+    map.on("mouseleave", LAYER_ID, () => {
+      map.getCanvas().style.cursor = "";
     });
 
     mapRef.current = map;
@@ -153,69 +207,43 @@ export function BuildingExtrusionMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [center, pitch, bounds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Re-fit when bounds change after mount (e.g. a building is added).
+  // Switch style when the toggle changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setStyle(STYLES[styleKey]);
+    // setupLayers runs on the next style.load.
+  }, [styleKey]);
+
+  // Re-fit when bounds change after mount.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !bounds) return;
     const fit = () =>
       map.fitBounds(bounds, { padding: 48, maxZoom: 18, duration: 400 });
     if (map.isStyleLoaded()) fit();
-    else map.once("load", fit);
+    else map.once("style.load", fit);
   }, [bounds]);
 
   // Sync buildings into the source when the data changes.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    const apply = () => {
-      const source = map.getSource(SOURCE_ID) as
-        | mapboxgl.GeoJSONSource
-        | undefined;
-      if (!source) return;
-
-      const features: Feature<Polygon>[] = buildings
-        .filter((b): b is BuildingGeom & { footprint: Polygon } => Boolean(b.footprint))
-        .map((b) => ({
-          type: "Feature",
-          geometry: b.footprint,
-          properties: {
-            id: b.id,
-            code: b.code,
-            name: b.name,
-            // Mapbox fill-extrusion heights are in meters.
-            heightMeters: (b.heightFt ?? 30) * 0.3048,
-            color: b.color ?? "#2563eb",
-            selected: selectedBuildingId === b.id,
-          },
-        }));
-
-      const fc: FeatureCollection<Polygon> = {
-        type: "FeatureCollection",
-        features,
-      };
-      source.setData(fc);
-    };
-
+    const apply = () => applyBuildingFeatures(map, buildings, selectedBuildingId);
     if (map.isStyleLoaded()) apply();
-    else map.once("load", apply);
+    else map.once("style.load", apply);
   }, [buildings, selectedBuildingId]);
 
-  // Sync overlay layers (separate from building extrusion). Each overlay
-  // gets its own source; existing sources are re-used via setData() on
-  // subsequent prop updates so we don't add+remove layers on every render.
-  const overlayIdsRef = useRef<Set<string>>(new Set());
+  // Sync overlay layers.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const layers = overlayLayers ?? [];
-
     const apply = () => {
       const wantedIds = new Set(layers.map((l) => l.id));
-
-      // Remove layers that disappeared from props.
       for (const id of Array.from(overlayIdsRef.current)) {
         if (!wantedIds.has(id)) {
           if (map.getLayer(id)) map.removeLayer(id);
@@ -223,36 +251,116 @@ export function BuildingExtrusionMap({
           overlayIdsRef.current.delete(id);
         }
       }
-
       for (const layer of layers) {
-        const existing = map.getSource(layer.id) as
-          | mapboxgl.GeoJSONSource
-          | undefined;
-        if (existing) {
-          existing.setData(layer.data);
-          continue;
-        }
-        map.addSource(layer.id, { type: "geojson", data: layer.data });
-        const beforeId =
-          layer.placement === "below" && map.getLayer(LAYER_ID)
-            ? LAYER_ID
-            : undefined;
-        map.addLayer(
-          {
-            id: layer.id,
-            type: layer.type,
-            source: layer.id,
-            paint: layer.paint as never,
-          },
-          beforeId,
-        );
-        overlayIdsRef.current.add(layer.id);
+        applyOverlayLayer(map, layer, overlayIdsRef.current);
       }
     };
-
     if (map.isStyleLoaded()) apply();
-    else map.once("load", apply);
+    else map.once("style.load", apply);
   }, [overlayLayers]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+      <StyleToggle styleKey={styleKey} onChange={setStyleKey} />
+    </div>
+  );
+}
+
+function applyBuildingFeatures(
+  map: mapboxgl.Map,
+  buildings: BuildingGeom[],
+  selectedBuildingId: string | null | undefined,
+) {
+  const source = map.getSource(SOURCE_ID) as
+    | mapboxgl.GeoJSONSource
+    | undefined;
+  if (!source) return;
+  const features: Feature<Polygon>[] = buildings
+    .filter((b): b is BuildingGeom & { footprint: Polygon } =>
+      Boolean(b.footprint),
+    )
+    .map((b) => ({
+      type: "Feature",
+      geometry: b.footprint,
+      properties: {
+        id: b.id,
+        code: b.code,
+        name: b.name,
+        heightMeters: (b.heightFt ?? 30) * 0.3048,
+        color: b.color ?? "#2563eb",
+        selected: selectedBuildingId === b.id,
+      },
+    }));
+  source.setData({ type: "FeatureCollection", features });
+}
+
+function applyOverlayLayer(
+  map: mapboxgl.Map,
+  layer: OverlayLayer,
+  knownIds: Set<string>,
+) {
+  const existing = map.getSource(layer.id) as
+    | mapboxgl.GeoJSONSource
+    | undefined;
+  if (existing) {
+    existing.setData(layer.data);
+    return;
+  }
+  map.addSource(layer.id, { type: "geojson", data: layer.data });
+  const beforeId =
+    layer.placement === "below" && map.getLayer(LAYER_ID)
+      ? LAYER_ID
+      : undefined;
+  map.addLayer(
+    {
+      id: layer.id,
+      type: layer.type,
+      source: layer.id,
+      paint: layer.paint as never,
+    },
+    beforeId,
+  );
+  knownIds.add(layer.id);
+}
+
+/**
+ * Two-state toggle in the top-left: Map (light) / Satellite. Mirrors the
+ * standard Google Maps affordance so users find it intuitively.
+ */
+function StyleToggle({
+  styleKey,
+  onChange,
+}: {
+  styleKey: MapStyleKey;
+  onChange: (next: MapStyleKey) => void;
+}) {
+  return (
+    <div className="absolute left-2 top-2 z-10 inline-flex overflow-hidden rounded-md border border-neutral-200 bg-white/95 text-[11px] shadow-sm backdrop-blur">
+      <button
+        type="button"
+        onClick={() => onChange("light")}
+        className={`px-2 py-1 font-medium ${
+          styleKey === "light"
+            ? "bg-neutral-900 text-white"
+            : "text-neutral-700 hover:bg-neutral-100"
+        }`}
+        aria-pressed={styleKey === "light"}
+      >
+        Map
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("satellite")}
+        className={`border-l border-neutral-200 px-2 py-1 font-medium ${
+          styleKey === "satellite"
+            ? "bg-neutral-900 text-white"
+            : "text-neutral-700 hover:bg-neutral-100"
+        }`}
+        aria-pressed={styleKey === "satellite"}
+      >
+        Satellite
+      </button>
+    </div>
+  );
 }

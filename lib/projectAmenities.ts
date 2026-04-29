@@ -102,6 +102,20 @@ export const PARKING_KIND_COLORS: Record<ParkingKind, string> = {
   mixed: "#a78bfa",
 };
 
+/** One parking lot: polygon + optional metadata. */
+export interface ParkingArea {
+  polygon: Polygon;
+  stalls: number | null;
+  kind: ParkingKind | null;
+  label: string | null;
+}
+
+/** One outdoor-storage / yard area. */
+export interface YardArea {
+  polygon: Polygon;
+  label: string | null;
+}
+
 /**
  * Tolerant parser for the parking kind. Returns null when the value isn't
  * one of the three supported kinds, so a stale/garbage row doesn't crash
@@ -112,6 +126,47 @@ export function parseParkingKind(value: unknown): ParkingKind | null {
     return value;
   }
   return null;
+}
+
+/**
+ * Tolerant parser for an array of parking areas. Drops malformed entries
+ * silently rather than throwing — same pattern as parseAccessPoints. Empty
+ * input (null / undefined / non-array) yields an empty array.
+ */
+export function parseParkingAreas(raw: unknown): ParkingArea[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ParkingArea[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const polygon = parseParcelPolygon(r.polygon);
+    if (!polygon) continue;
+    const stalls =
+      typeof r.stalls === "number" && Number.isFinite(r.stalls) && r.stalls >= 0
+        ? Math.round(r.stalls)
+        : null;
+    const kind = parseParkingKind(r.kind);
+    const label = typeof r.label === "string" ? r.label : null;
+    out.push({ polygon, stalls, kind, label });
+  }
+  return out;
+}
+
+/**
+ * Tolerant parser for an array of yard areas. Drops malformed entries.
+ */
+export function parseYardAreas(raw: unknown): YardArea[] {
+  if (!Array.isArray(raw)) return [];
+  const out: YardArea[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const polygon = parseParcelPolygon(r.polygon);
+    if (!polygon) continue;
+    const label = typeof r.label === "string" ? r.label : null;
+    out.push({ polygon, label });
+  }
+  return out;
 }
 
 /**

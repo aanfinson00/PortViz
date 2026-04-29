@@ -125,19 +125,28 @@ export const projectRouter = router({
         id: z.string().uuid(),
         parcelPolygon: polygonSchema.nullable().optional(),
         accessPoints: z.array(accessPointSchema).max(40).nullable().optional(),
-        parkingPolygon: polygonSchema.nullable().optional(),
-        parkingStalls: z
-          .number()
-          .int()
-          .min(0)
-          .max(100_000)
+        parkingAreas: z
+          .array(
+            z.object({
+              polygon: polygonSchema,
+              stalls: z.number().int().min(0).max(100_000).nullable(),
+              kind: z.enum(["car", "trailer", "mixed"]).nullable(),
+              label: z.string().max(80).nullable(),
+            }),
+          )
+          .max(40)
           .nullable()
           .optional(),
-        parkingKind: z
-          .enum(["car", "trailer", "mixed"])
+        yardAreas: z
+          .array(
+            z.object({
+              polygon: polygonSchema,
+              label: z.string().max(80).nullable(),
+            }),
+          )
+          .max(40)
           .nullable()
           .optional(),
-        yardPolygon: polygonSchema.nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -148,17 +157,11 @@ export const projectRouter = router({
       if (input.accessPoints !== undefined) {
         patch.access_points = input.accessPoints;
       }
-      if (input.parkingPolygon !== undefined) {
-        patch.parking_polygon = input.parkingPolygon;
+      if (input.parkingAreas !== undefined) {
+        patch.parking_areas = input.parkingAreas;
       }
-      if (input.parkingStalls !== undefined) {
-        patch.parking_stalls = input.parkingStalls;
-      }
-      if (input.parkingKind !== undefined) {
-        patch.parking_kind = input.parkingKind;
-      }
-      if (input.yardPolygon !== undefined) {
-        patch.yard_polygon = input.yardPolygon;
+      if (input.yardAreas !== undefined) {
+        patch.yard_areas = input.yardAreas;
       }
       if (Object.keys(patch).length === 0) return { ok: true };
       const { error } = await ctx.supabase
@@ -180,7 +183,7 @@ export const projectRouter = router({
           /schema cache/i.test(msg);
         if (isMissingColumn) {
           throw new Error(
-            "This site-amenity field isn't in your database yet. Apply migrations 0007 (parcel + access points) and 0009 (parking + yard) in the Supabase SQL editor, then try again. Original: " +
+            "This site-amenity field isn't in your database yet. Apply migrations 0007 (parcel + access points), 0009 (parking + yard) and 0013 (multi-area parking + yard) in the Supabase SQL editor, then try again. Original: " +
               msg,
           );
         }

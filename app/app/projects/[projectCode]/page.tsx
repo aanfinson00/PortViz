@@ -28,7 +28,8 @@ import {
 import {
   parseAccessPoints,
   parseParcelPolygon,
-  parseParkingKind,
+  parseParkingAreas,
+  parseYardAreas,
 } from "@/lib/projectAmenities";
 import { api } from "@/lib/trpc/react";
 
@@ -409,23 +410,14 @@ export default function ProjectDetailPage({
               const p = project.data as {
                 parcel_polygon?: unknown;
                 access_points?: unknown;
-                parking_polygon?: unknown;
-                parking_stalls?: number | null;
-                parking_kind?: unknown;
-                yard_polygon?: unknown;
+                parking_areas?: unknown;
+                yard_areas?: unknown;
               };
-              const parkingPolygon = parseParcelPolygon(p.parking_polygon);
               return {
                 parcel: parseParcelPolygon(p.parcel_polygon),
                 accessPoints: parseAccessPoints(p.access_points),
-                parking: parkingPolygon
-                  ? {
-                      polygon: parkingPolygon,
-                      stalls: p.parking_stalls ?? null,
-                      kind: parseParkingKind(p.parking_kind),
-                    }
-                  : null,
-                yard: parseParcelPolygon(p.yard_polygon),
+                parking: parseParkingAreas(p.parking_areas),
+                yard: parseYardAreas(p.yard_areas),
               };
             })()}
           />
