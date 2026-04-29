@@ -84,6 +84,11 @@ export function BuildingExtrusionMap({
   const overlayLayersRef = useRef(overlayLayers);
   const boundsRef = useRef(bounds);
   const overlayIdsRef = useRef<Set<string>>(new Set());
+  // The map is constructed with `style: STYLES[initialStyle]` already, so
+  // the styleKey effect's first run on mount would issue a redundant
+  // setStyle() (Mapbox always re-fetches even when the URL is unchanged).
+  // Skip the first run; subsequent ones come from user toggles.
+  const styleInitializedRef = useRef(false);
   const [styleKey, setStyleKey] = useState<MapStyleKey>(initialStyle);
 
   useEffect(() => {
@@ -210,10 +215,17 @@ export function BuildingExtrusionMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch style when the toggle changes.
+  // Switch style when the toggle changes. Skip the first run because the
+  // map was constructed with the initial style already — calling setStyle
+  // on mount would trigger a redundant style fetch and noticeably delay
+  // first paint.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    if (!styleInitializedRef.current) {
+      styleInitializedRef.current = true;
+      return;
+    }
     map.setStyle(STYLES[styleKey]);
     // setupLayers runs on the next style.load.
   }, [styleKey]);
