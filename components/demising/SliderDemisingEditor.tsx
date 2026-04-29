@@ -122,11 +122,33 @@ export function SliderDemisingEditor({
   // Track which space rows have the office editor expanded.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // Re-hydrate when initialSpaces lands asynchronously.
+  // Stable signature of the server-side data: we only re-hydrate local
+  // state when the server's snapshot actually changes (different ids,
+  // codes, target_sfs, etc.). Without this, every parent re-render would
+  // overwrite local edits with the last-fetched server state — and since
+  // onChange triggers a parent re-render, every "Add space" / wall drag
+  // would silently revert before the user could see it.
+  const initialSignature = useMemo(
+    () =>
+      initialSpaces
+        .map(
+          (s) =>
+            `${s.id}:${s.code}:${s.position_order ?? ""}:${s.target_sf ?? ""}:${
+              s.is_pinned ?? ""
+            }:${s.office_sf ?? ""}:${s.office_corner ?? ""}`,
+        )
+        .join("|"),
+    [initialSpaces],
+  );
+
   useEffect(() => {
     setSpaces(initialEditable);
     setCodes(Object.fromEntries(initialSpaces.map((s) => [s.id, s.code])));
-  }, [initialEditable, initialSpaces]);
+    // initialEditable + initialSpaces are derived from initialSignature, so
+    // the signature is the canonical trigger; we deliberately exclude the
+    // others to avoid resetting on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSignature]);
 
   useEffect(() => {
     onChange?.(spaces);
@@ -174,19 +196,18 @@ export function SliderDemisingEditor({
   });
 
   function handleAddSpace() {
-    setSpaces((prev) => {
-      const newId = `${TEMP_PREFIX}${++tempCounterRef.current}`;
-      const next = splitLargest(prev, totalSf, newId, {
+    // Compute the new id + code OUTSIDE the setState updater so React's
+    // strict-mode double-invoke doesn't cause the ref counter to skip.
+    const newId = `${TEMP_PREFIX}${++tempCounterRef.current}`;
+    const usedCodes = new Set(Object.values(codes));
+    const code = nextSpaceCode(Array.from(usedCodes));
+    setSpaces((prev) =>
+      splitLargest(prev, totalSf, newId, {
         officeSf: null,
         officeCorner: "front-left" as OfficeCorner,
-      });
-      // Coin a new code for the new space — pick the next free numeric
-      // suffix from the existing codes pool.
-      const usedCodes = new Set(Object.values(codes));
-      const code = nextSpaceCode(Array.from(usedCodes));
-      setCodes((c) => ({ ...c, [newId]: code }));
-      return next;
-    });
+      }),
+    );
+    setCodes((prev) => ({ ...prev, [newId]: code }));
   }
 
   function handleOfficeSfChange(id: string, value: string) {
