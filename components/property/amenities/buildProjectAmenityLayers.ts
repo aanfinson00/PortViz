@@ -16,7 +16,8 @@ import {
   accessPointMarker,
   PARKING_KIND_COLORS,
   type AccessPoint,
-  type ParkingKind,
+  type ParkingArea,
+  type YardArea,
 } from "@/lib/projectAmenities";
 
 export interface ProjectAmenityToggles {
@@ -26,17 +27,11 @@ export interface ProjectAmenityToggles {
   yard: boolean;
 }
 
-export interface ParkingArea {
-  polygon: Polygon;
-  stalls: number | null;
-  kind: ParkingKind | null;
-}
-
 export interface ProjectAmenityInput {
   parcel: Polygon | null;
   accessPoints: AccessPoint[];
-  parking: ParkingArea | null;
-  yard: Polygon | null;
+  parking: ParkingArea[];
+  yard: YardArea[];
 }
 
 const LAYER_IDS = {
@@ -89,16 +84,33 @@ export function buildProjectAmenityLayers(
     : emptyFC();
 
   const parkingFC: FeatureCollection<Polygon> =
-    toggles.parking && input.parking
-      ? singletonFC(input.parking.polygon, {
-          color: PARKING_KIND_COLORS[input.parking.kind ?? "car"],
-          stalls: input.parking.stalls ?? 0,
-          kind: input.parking.kind ?? "car",
-        })
+    toggles.parking && input.parking.length > 0
+      ? {
+          type: "FeatureCollection",
+          features: input.parking.map<Feature<Polygon>>((area) => ({
+            type: "Feature",
+            geometry: area.polygon,
+            properties: {
+              color: PARKING_KIND_COLORS[area.kind ?? "car"],
+              stalls: area.stalls ?? 0,
+              kind: area.kind ?? "car",
+              label: area.label ?? "",
+            },
+          })),
+        }
       : emptyFC();
 
   const yardFC: FeatureCollection<Polygon> =
-    toggles.yard && input.yard ? singletonFC(input.yard) : emptyFC();
+    toggles.yard && input.yard.length > 0
+      ? {
+          type: "FeatureCollection",
+          features: input.yard.map<Feature<Polygon>>((area) => ({
+            type: "Feature",
+            geometry: area.polygon,
+            properties: { label: area.label ?? "" },
+          })),
+        }
+      : emptyFC();
 
   return [
     {
