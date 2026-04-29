@@ -154,6 +154,91 @@ describe("buildBuildingMapGeoms", () => {
     expect(officeGeom?.heightFt).toBe(10);
   });
 
+  it("colorBy='tenant' uses each space's tenantColor", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({
+        demisingMode: "sliders",
+        colorBy: "tenant",
+        spaces: [
+          {
+            id: "s1",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            tenantColor: "#ff0000",
+          },
+          {
+            id: "s2",
+            positionOrder: 1,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            tenantColor: "#00ff00",
+          },
+        ],
+      }),
+    );
+    expect(out).toHaveLength(2);
+    expect(out[0]?.color).toBe("#ff0000");
+    expect(out[1]?.color).toBe("#00ff00");
+  });
+
+  it("colorBy='tenant' falls back to vacant grey for spaces without a tenantColor", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({
+        demisingMode: "sliders",
+        colorBy: "tenant",
+        spaces: [
+          {
+            id: "s1",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            tenantColor: "#ff0000",
+          },
+          {
+            id: "s2",
+            positionOrder: 1,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            tenantColor: null, // vacant
+          },
+        ],
+      }),
+    );
+    expect(out[0]?.color).toBe("#ff0000");
+    // Slate-400 #94a3b8 — distinguishes leased from vacant at a glance.
+    expect(out[1]?.color).toBe("#94a3b8");
+  });
+
+  it("colorBy default ('ordinal') ignores tenantColor and uses ordinal palette", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({
+        demisingMode: "sliders",
+        // colorBy omitted -> ordinal
+        spaces: [
+          {
+            id: "s1",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            tenantColor: "#ff0000", // would-be tenant color, ignored in ordinal mode
+          },
+        ],
+      }),
+    );
+    expect(out[0]?.color).not.toBe("#ff0000");
+  });
+
   it("uses the bays' frontage_side to orient slab slicing", () => {
     // We can't easily assert orientation here without re-implementing the
     // slicer, but at minimum the helper shouldn't blow up when bays carry

@@ -123,6 +123,19 @@ export default function ProjectDetailPage({
     return m;
   }, [buildingsListQuery.data]);
 
+  // Map of space_id → active tenant's brand color, derived from
+  // lease.activeByProject. Used by buildBuildingMapGeoms (colorBy:
+  // 'tenant') so the project hero shows leased slabs in tenant colors
+  // and vacant slabs in a neutral grey, instead of just ordinal colors.
+  const tenantColorBySpaceId = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const lease of (leasesQuery.data ?? []) as LeaseRow[]) {
+      const tenant = firstTenant(lease.tenant);
+      m.set(lease.space_id, tenant?.brand_color ?? null);
+    }
+    return m;
+  }, [leasesQuery.data]);
+
   const heroBuildings = useMemo(() => {
     return ((buildingsQuery.data ?? []) as MapBuildingRow[]).map((b) => ({
       id: b.id,
@@ -131,6 +144,7 @@ export default function ProjectDetailPage({
       footprint: b.footprint_geojson,
       heightFt: b.height_ft ? Number(b.height_ft) : null,
       demisingMode: (b.demising_mode ?? "bays") as "bays" | "sliders",
+      colorBy: "tenant" as const,
       bays: b.bay.map((x) => ({
         id: x.id,
         ordinal: x.ordinal,
@@ -160,9 +174,10 @@ export default function ProjectDetailPage({
               | "rear-left"
               | "rear-right"
               | null) ?? null,
+          tenantColor: tenantColorBySpaceId.get(s.id) ?? null,
         })),
     }));
-  }, [buildingsQuery.data]);
+  }, [buildingsQuery.data, tenantColorBySpaceId]);
 
   // Site-amenity inputs for the hero overlay (docks + drive-ins + truck
   // courts). Each building maps its bays + truck_court_depth_ft into the

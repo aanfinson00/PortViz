@@ -38,6 +38,10 @@ import {
  *  height. Hardcoded for v1; future polish: per-space override. */
 const OFFICE_CLEAR_HEIGHT_FT = 14;
 
+/** Vacant slab color when colorBy='tenant' — slate-400. Distinguishes
+ *  available space from leased at a glance on the project hero. */
+const VACANT_TENANT_COLOR = "#94a3b8";
+
 export interface BuildingForRendering {
   id: string;
   code: string;
@@ -46,6 +50,16 @@ export interface BuildingForRendering {
   heightFt: number | null;
   demisingMode: "bays" | "sliders";
   bays: Bay[];
+  /**
+   * How to color each space's slab.
+   *  - 'ordinal' (default): use spaceColor(positionOrder). Each space
+   *    gets a distinct color so demising reads clearly while editing.
+   *    Used by the building detail page.
+   *  - 'tenant': use each space's tenantColor when set; vacant spaces
+   *    fall back to a neutral grey. Used by the project hero so users
+   *    see "who's where" at a glance.
+   */
+  colorBy?: "ordinal" | "tenant";
   spaces: Array<
     SliderSpace & {
       /** Optional space code; used as a label suffix on the BuildingGeom.
@@ -54,6 +68,11 @@ export interface BuildingForRendering {
       code?: string;
       officeSf: number | null;
       officeCorner: OfficeCorner | null;
+      /**
+       * Brand color of the active tenant in this space, or null when
+       * vacant. Only consulted when colorBy === 'tenant'.
+       */
+      tenantColor?: string | null;
     }
   >;
 }
@@ -94,7 +113,10 @@ export function buildBuildingMapGeoms(
         officeSf: r.officeSf ?? null,
         corner: r.officeCorner ?? "front-left",
       });
-      const slabColor = spaceColor(i);
+      const slabColor =
+        building.colorBy === "tenant"
+          ? (r.tenantColor ?? VACANT_TENANT_COLOR)
+          : spaceColor(i);
       const codeForLabel = r.code ?? r.id;
       split.warehouseParts.forEach((part, partIdx) => {
         out.push({
