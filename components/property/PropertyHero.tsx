@@ -18,15 +18,19 @@ import {
   buildProjectAmenityLayers,
   type ProjectAmenityInput,
 } from "@/components/property/amenities/buildProjectAmenityLayers";
+import {
+  buildBuildingMapGeoms,
+  type BuildingForRendering,
+} from "@/lib/buildingMapGeoms";
 
 interface PropertyHeroProps {
-  buildings: Array<{
-    id: string;
-    code: string;
-    name: string | null;
-    footprint: Polygon | null;
-    heightFt: number | null;
-  }>;
+  /**
+   * Buildings with everything the demising-aware renderer needs:
+   * footprint, height, bays, slider-mode spaces with office buildouts.
+   * Shared with the building detail page via lib/buildingMapGeoms so
+   * the project hero and building page produce identical visuals.
+   */
+  buildings: BuildingForRendering[];
   fallbackCenter?: [number, number] | null;
   /**
    * Optional building-level amenity inputs (bays per building +
@@ -41,6 +45,8 @@ interface PropertyHeroProps {
    * still renders cleanly.
    */
   projectAmenities?: ProjectAmenityInput;
+  /** Show a translucent overlay over the map while data is loading. */
+  isLoading?: boolean;
 }
 
 /**
@@ -53,6 +59,7 @@ export function PropertyHero({
   fallbackCenter,
   amenities,
   projectAmenities,
+  isLoading = false,
 }: PropertyHeroProps) {
   const [toggles, setToggles] = useState<AllAmenityToggles>({
     docks: true,
@@ -83,20 +90,7 @@ export function PropertyHero({
   );
 
   const mapBuildings: BuildingGeom[] = useMemo(
-    () =>
-      buildings.flatMap((b) => {
-        if (!b.footprint) return [];
-        return [
-          {
-            id: b.id,
-            code: b.code,
-            name: b.name,
-            footprint: b.footprint,
-            heightFt: b.heightFt,
-            color: "#2563eb",
-          },
-        ];
-      }),
+    () => buildings.flatMap(buildBuildingMapGeoms),
     [buildings],
   );
 
@@ -166,6 +160,13 @@ export function PropertyHero({
           available={available}
           parkingKind={projectAmenities?.parking?.[0]?.kind ?? null}
         />
+      )}
+      {isLoading && mapBuildings.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/40 backdrop-blur-sm">
+          <div className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm">
+            Loading site…
+          </div>
+        </div>
       )}
     </div>
   );

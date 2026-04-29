@@ -14,6 +14,7 @@ type ListForMapRow = {
   footprint_geojson: Polygon | null;
   height_ft: number | null;
   truck_court_depth_ft: number | null;
+  demising_mode: "bays" | "sliders" | null;
   bay: Array<{
     id: string;
     ordinal: number;
@@ -29,6 +30,10 @@ type ListForMapRow = {
     code: string;
     status: string;
     target_sf: number | null;
+    position_order: number | null;
+    is_pinned: boolean | null;
+    office_sf: number | null;
+    office_corner: string | null;
     space_bay: Array<{ bay_id: string }>;
   }>;
 };
@@ -96,9 +101,9 @@ export const buildingRouter = router({
   listForMap: orgProcedure
     .input(z.object({ projectId: z.string().uuid() }))
     .query(async ({ ctx, input }): Promise<ListForMapRow[]> => {
-      const augmented = `id, code, name, footprint_geojson, height_ft, truck_court_depth_ft,
+      const augmented = `id, code, name, footprint_geojson, height_ft, truck_court_depth_ft, demising_mode,
          bay (id, ordinal, width_ft, depth_ft, dock_door_count, drive_in_count, has_yard_access, frontage_side),
-         space (id, code, status, target_sf, space_bay (bay_id))`;
+         space (id, code, status, target_sf, position_order, is_pinned, office_sf, office_corner, space_bay (bay_id))`;
       const core = `id, code, name, footprint_geojson, height_ft,
          bay (id, ordinal, width_ft, depth_ft, dock_door_count, drive_in_count, has_yard_access, frontage_side),
          space (id, code, status, space_bay (bay_id))`;
@@ -135,14 +140,34 @@ export const buildingRouter = router({
       const fallback = await tryQuery(core);
       if (fallback.error) throw fallback.error;
       const rows = (fallback.data ?? []) as unknown as Array<
-        Omit<ListForMapRow, "truck_court_depth_ft" | "space"> & {
-          space: Array<Omit<ListForMapRow["space"][number], "target_sf">>;
+        Omit<
+          ListForMapRow,
+          "truck_court_depth_ft" | "demising_mode" | "space"
+        > & {
+          space: Array<
+            Omit<
+              ListForMapRow["space"][number],
+              "target_sf" | "position_order" | "is_pinned" | "office_sf" | "office_corner"
+            >
+          >;
         }
       >;
+      // Pre-migration environments don't have the slider/office fields, so
+      // null-fill them. Demising mode defaults to 'bays' since that's the
+      // legacy behavior — keeps the project view rendering buildings as
+      // single extrusions until 0010+0012 are applied.
       return rows.map((b) => ({
         ...b,
         truck_court_depth_ft: null,
-        space: b.space.map((s) => ({ ...s, target_sf: null })),
+        demising_mode: "bays" as const,
+        space: b.space.map((s) => ({
+          ...s,
+          target_sf: null,
+          position_order: null,
+          is_pinned: null,
+          office_sf: null,
+          office_corner: null,
+        })),
       }));
     }),
 

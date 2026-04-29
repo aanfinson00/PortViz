@@ -27,8 +27,8 @@ import {
   sliceFootprintByArea,
   type FrontageAxis,
 } from "@/lib/footprintSlicer";
+import { buildBuildingMapGeoms } from "@/lib/buildingMapGeoms";
 import {
-  lightenColor,
   placeCornerOffice,
   type OfficeCorner,
 } from "@/lib/officeBuildout";
@@ -242,55 +242,29 @@ export default function BuildingDetailPage({
     if (!building || !footprint) return [];
     const heightFt = building.height_ft ? Number(building.height_ft) : null;
 
-    // Slider mode: slice the footprint by the current resolved space SFs
-    // (live, even before save). Each space splits into warehouse parts
-    // (the L-shape complement of the office) plus an optional office
-    // extrusion anchored to the chosen corner. When officeSf is null /
-    // 0, the slab is rendered as a single warehouse extrusion.
-    if (demisingMode === "sliders" && sliderResolved.length > 0) {
-      const out: BuildingGeom[] = [];
-      sliderResolved.forEach((r, i) => {
-        const slab = sliderSlabs[i] ?? footprint;
-        const split = placeCornerOffice({
-          slab,
-          side: sliderFrontage,
-          officeSf: r.officeSf ?? null,
-          corner: (r.officeCorner ?? "front-left") as OfficeCorner,
-        });
-        const baseColor = spaceColor(i);
-        // Warehouse parts: 0..2 axis-aligned rectangles tiling the slab
-        // minus the office bbox.
-        split.warehouseParts.forEach((part, partIdx) => {
-          out.push({
-            id: `slab-${r.id}-wh-${partIdx}`,
-            code: `${i}-wh-${partIdx}`,
-            name: `Space ${i + 1} (warehouse)`,
-            footprint: part,
-            heightFt,
-            color: baseColor,
-          });
-        });
-        if (split.office) {
-          // Offices typically have a suspended ceiling around 12-16 ft
-          // even when the warehouse clear height is 30+ ft. Render the
-          // office at a lower height to surface that distinction in 3D.
-          // Floor at 14 ft so it reads as office regardless of building
-          // height; falls back to the building height when smaller.
-          const buildingHeight = building.height_ft
-            ? Number(building.height_ft)
-            : null;
-          const officeHeight = Math.min(14, buildingHeight ?? 14);
-          out.push({
-            id: `slab-${r.id}-of`,
-            code: `${i}-of`,
-            name: `Space ${i + 1} (office)`,
-            footprint: split.office,
-            heightFt: officeHeight,
-            color: lightenColor(baseColor, 0.5),
-          });
-        }
+    // Slider mode: delegate to the shared helper (lib/buildingMapGeoms)
+    // so the building detail page renders identically to the project
+    // hero. The helper takes the resolved spaces from local editor state
+    // (sliderSpaces) so unsaved drags + edits show up live in 3D.
+    if (demisingMode === "sliders" && sliderSpaces.length > 0) {
+      return buildBuildingMapGeoms({
+        id: building.id,
+        code: building.code,
+        name: building.name,
+        footprint,
+        heightFt,
+        demisingMode: "sliders",
+        bays,
+        spaces: sliderSpaces.map((s) => ({
+          id: s.id,
+          positionOrder: s.positionOrder,
+          isPinned: s.isPinned,
+          targetSf: s.targetSf,
+          officeSf: s.officeSf,
+          officeCorner: s.officeCorner,
+          code: s.id, // local-only id; helper uses it for the BuildingGeom label
+        })),
       });
-      return out;
     }
 
     // Legacy bay mode: one extrusion per bay colored by its owning space.

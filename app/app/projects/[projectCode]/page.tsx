@@ -40,6 +40,7 @@ type MapBuildingRow = {
   footprint_geojson: Polygon | null;
   height_ft: number | null;
   truck_court_depth_ft: number | null;
+  demising_mode: "bays" | "sliders" | null;
   bay: Array<{
     id: string;
     ordinal: number;
@@ -55,6 +56,10 @@ type MapBuildingRow = {
     code: string;
     status: string;
     target_sf: number | null;
+    position_order: number | null;
+    is_pinned: boolean | null;
+    office_sf: number | null;
+    office_corner: string | null;
     space_bay: Array<{ bay_id: string }>;
   }>;
 };
@@ -125,6 +130,37 @@ export default function ProjectDetailPage({
       name: b.name,
       footprint: b.footprint_geojson,
       heightFt: b.height_ft ? Number(b.height_ft) : null,
+      demisingMode: (b.demising_mode ?? "bays") as "bays" | "sliders",
+      bays: b.bay.map((x) => ({
+        id: x.id,
+        ordinal: x.ordinal,
+        widthFt: Number(x.width_ft),
+        depthFt: Number(x.depth_ft),
+        dockDoorCount: x.dock_door_count,
+        driveInCount: x.drive_in_count,
+        hasYardAccess: x.has_yard_access,
+        frontageSide: x.frontage_side as FrontageSide,
+      })),
+      spaces: b.space
+        // Only spaces with position_order participate in slider rendering;
+        // those without it (legacy or bay-mode) fall through to a single
+        // monolithic extrusion via the helper.
+        .filter((s) => s.position_order != null)
+        .map((s) => ({
+          id: s.id,
+          code: s.code,
+          positionOrder: s.position_order ?? 0,
+          isPinned: s.is_pinned ?? false,
+          targetSf: s.target_sf,
+          officeSf: s.office_sf,
+          officeCorner:
+            (s.office_corner as
+              | "front-left"
+              | "front-right"
+              | "rear-left"
+              | "rear-right"
+              | null) ?? null,
+        })),
     }));
   }, [buildingsQuery.data]);
 
@@ -406,6 +442,9 @@ export default function ProjectDetailPage({
             buildings={heroBuildings}
             fallbackCenter={fallbackCenter}
             amenities={heroAmenities}
+            isLoading={
+              buildingsQuery.isLoading || buildingsListQuery.isLoading
+            }
             projectAmenities={(() => {
               const p = project.data as {
                 parcel_polygon?: unknown;
