@@ -3,7 +3,23 @@
 import Link from "next/link";
 import { SpaceStatusChip } from "@/components/lease/SpaceStatusChip";
 import { downloadCsv, toCsv } from "@/lib/csv";
+import {
+  currentYearRent,
+  LEASE_TYPE_LABELS,
+  parseLeaseType,
+  parseRentSchedule,
+  type LeaseType,
+} from "@/lib/leaseEconomics";
 import { api } from "@/lib/trpc/react";
+
+const LEASE_TYPE_SHORT: Record<LeaseType, string> = {
+  nnn: "NNN",
+  modified_gross: "MG",
+  gross: "GROSS",
+  absolute_net: "ABS NET",
+  percentage: "%",
+  other: "OTHER",
+};
 
 interface RentRollProps {
   buildingId: string;
@@ -23,7 +39,10 @@ type LeaseRow = {
   start_date: string;
   end_date: string;
   base_rent_psf: number | null;
+  escalation_pct?: number | null;
   term_months: number | null;
+  lease_type?: string | null;
+  rent_schedule?: unknown;
   // PostgREST returns embedded relations as either an object or an array
   // depending on whether it can determine a to-one vs to-many cardinality.
   // Handle both shapes to keep the UI robust.
@@ -143,9 +162,39 @@ export function RentRoll({ buildingId, projectCode, buildingCode }: RentRollProp
                     : <span className="text-neutral-400">—</span>}
                 </td>
                 <td className="px-4 py-2">
-                  {lease?.base_rent_psf
-                    ? `$${lease.base_rent_psf}`
-                    : <span className="text-neutral-400">—</span>}
+                  {lease ? (
+                    (() => {
+                      const rate = currentYearRent({
+                        startDate: lease.start_date,
+                        endDate: lease.end_date,
+                        baseRentPsf: lease.base_rent_psf,
+                        escalationPct: lease.escalation_pct ?? null,
+                        rentSchedule: parseRentSchedule(lease.rent_schedule),
+                      });
+                      const type = parseLeaseType(lease.lease_type);
+                      return (
+                        <span className="flex items-center gap-2">
+                          <span className="font-mono">
+                            {rate != null ? (
+                              `$${rate.toFixed(2)}`
+                            ) : (
+                              <span className="text-neutral-400">—</span>
+                            )}
+                          </span>
+                          {type && (
+                            <span
+                              className="rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-600"
+                              title={LEASE_TYPE_LABELS[type]}
+                            >
+                              {LEASE_TYPE_SHORT[type]}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()
+                  ) : (
+                    <span className="text-neutral-400">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-2">
                   <SpaceStatusChip
