@@ -1,6 +1,52 @@
 import { z } from "zod";
 import { logEvent } from "../audit";
 import { editorProcedure, orgProcedure, router } from "../init";
+import { nextSpaceStatusAfterLeaseChange } from "@/lib/spaceStatusPolicy";
+
+type SupabaseClient = Parameters<typeof logEvent>[0];
+
+/**
+ * Recompute and persist a space's status from its current lease set.
+ * Called after every lease.create / lease.update so the user never has
+ * to manually toggle a space from vacant → leased on signing or back
+ * again on expiry.
+ *
+ * Failures here are swallowed — auto-status is convenience plumbing,
+ * not a transactional invariant. The lease itself is the source of
+ * truth; if a status flip fails (e.g. RLS hiccup), the next mutation
+ * picks it up.
+ */
+async function reconcileSpaceStatus(
+  supabase: SupabaseClient,
+  orgId: string,
+  spaceId: string,
+): Promise<void> {
+  const { data: space } = await supabase
+    .from("space")
+    .select("id, status")
+    .eq("id", spaceId)
+    .eq("org_id", orgId)
+    .maybeSingle();
+  if (!space) return;
+
+  const { data: leases } = await supabase
+    .from("lease")
+    .select("start_date, end_date")
+    .eq("space_id", spaceId)
+    .eq("org_id", orgId);
+
+  const next = nextSpaceStatusAfterLeaseChange(
+    String(space.status ?? ""),
+    (leases ?? []) as Array<{ start_date: string; end_date: string }>,
+  );
+  if (!next) return;
+
+  await supabase
+    .from("space")
+    .update({ status: next })
+    .eq("id", spaceId)
+    .eq("org_id", orgId);
+}
 
 const rentScheduleEntry = z.object({
   fromMonth: z.number().int().min(1),
@@ -260,6 +306,7 @@ export const leaseRouter = router({
       kind: "created",
       payload: { snapshot: data },
     });
+    await reconcileSpaceStatus(ctx.supabase, ctx.orgId, input.spaceId);
     return data;
   }),
 
@@ -273,6 +320,17 @@ export const leaseRouter = router({
     .mutation(async ({ ctx, input }) => {
       const patch = leasePatch(input);
       if (Object.keys(patch).length === 0) return { ok: true };
+
+      // Capture the old space_id before the update so we can reconcile
+      // both the source and destination spaces if the lease is being
+      // moved between spaces (rare but possible via the form).
+      const { data: existing } = await ctx.supabase
+        .from("lease")
+        .select("space_id")
+        .eq("id", input.id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
       const { data, error } = await ctx.supabase
         .from("lease")
         .update(patch)
@@ -289,6 +347,14 @@ export const leaseRouter = router({
         kind: "updated",
         payload: { patch },
       });
+
+      const affectedSpaces = new Set<string>();
+      if (existing?.space_id) affectedSpaces.add(String(existing.space_id));
+      if (data?.space_id) affectedSpaces.add(String(data.space_id));
+      for (const sid of affectedSpaces) {
+        await reconcileSpaceStatus(ctx.supabase, ctx.orgId, sid);
+      }
+
       return data;
     }),
 });
