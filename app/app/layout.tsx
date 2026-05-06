@@ -1,9 +1,16 @@
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { TopNav } from "@/components/layout/TopNav";
 
 /**
- * Layout for the authenticated app shell. The Cmd-K command palette mounts
- * here (rather than in the root layout) so it doesn't fire org-scoped tRPC
- * queries on public surfaces like /share/[token] and /login.
+ * Layout for the authenticated app shell. Mounts the persistent top
+ * navigation above every /app/* page so users never lose their nav,
+ * and the Cmd-K command palette as a sibling so it's only attached
+ * inside the authenticated tree (not on /share/[token] or /login).
+ *
+ * The flex column + flex-1 child wrapper means children that want to
+ * fill the remaining viewport can use h-full; children that grow
+ * naturally (min-h-screen) work unchanged inside the scrollable
+ * container.
  */
 export default function AppLayout({
   children,
@@ -11,9 +18,12 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
-      {children}
+    <div className="flex h-screen flex-col">
+      <TopNav />
+      <div className="flex flex-1 min-h-0 flex-col overflow-auto">
+        {children}
+      </div>
       <CommandPalette />
-    </>
+    </div>
   );
 }

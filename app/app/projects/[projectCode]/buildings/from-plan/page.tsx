@@ -126,7 +126,7 @@ export default function FromPlanWizardPage({
   }
 
   return (
-    <main className="flex h-screen flex-col">
+    <main className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-4">
         <div>
           <Link
