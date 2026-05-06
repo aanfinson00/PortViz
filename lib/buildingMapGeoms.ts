@@ -73,12 +73,31 @@ export interface BuildingForRendering {
        * vacant. Only consulted when colorBy === 'tenant'.
        */
       tenantColor?: string | null;
+      /**
+       * Whether the space currently has an active lease. Drives the
+       * "Show only available" filter on the property hero — when the
+       * caller passes `hideLeased: true`, leased slabs are dropped from
+       * the output entirely.
+       */
+      isLeased?: boolean;
     }
   >;
 }
 
+export interface BuildBuildingMapGeomsOptions {
+  /**
+   * When true, slider-mode slabs flagged `isLeased` are skipped (and so
+   * are their offices). Bay-mode buildings whose every space is leased
+   * are also dropped — leaving them rendered would defeat the filter.
+   * Buildings with no spaces stay rendered (they're "raw" and may still
+   * be marketable).
+   */
+  hideLeased?: boolean;
+}
+
 export function buildBuildingMapGeoms(
   building: BuildingForRendering,
+  options: BuildBuildingMapGeomsOptions = {},
 ): BuildingGeom[] {
   if (!building.footprint) return [];
   const heightFt = building.heightFt ?? null;
@@ -104,8 +123,13 @@ export function buildBuildingMapGeoms(
       frontage,
       resolved.map((r) => r.sf),
     );
+    // Map back to the original space records so we can read the leased
+    // flag — resolveSpaces preserves order and ids, so a Map by id works
+    // even when SFs got rebalanced inside the resolver.
+    const byId = new Map(building.spaces.map((s) => [s.id, s]));
     const out: BuildingGeom[] = [];
     resolved.forEach((r, i) => {
+      if (options.hideLeased && byId.get(r.id)?.isLeased) return;
       const slab = slabs[i] ?? building.footprint!;
       const split = placeCornerOffice({
         slab,
@@ -142,7 +166,17 @@ export function buildBuildingMapGeoms(
     return out;
   }
 
-  // Bay/unspecified: single monolithic extrusion.
+  // Bay/unspecified: single monolithic extrusion. When hideLeased is
+  // on and we know about every space here, only drop the building if
+  // every space is leased — otherwise the user loses sight of the
+  // building entirely even though some of it is still available.
+  if (
+    options.hideLeased &&
+    building.spaces.length > 0 &&
+    building.spaces.every((s) => s.isLeased)
+  ) {
+    return [];
+  }
   return [
     {
       id: building.id,

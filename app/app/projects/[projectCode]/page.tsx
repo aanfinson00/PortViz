@@ -151,6 +151,18 @@ export default function ProjectDetailPage({
     return m;
   }, [leasesQuery.data]);
 
+  // Set of space_ids that currently have an active lease. Drives the
+  // "Show only available" hero filter and the per-card highlighting.
+  // Computed here (before heroBuildings) so the hero memo can read it
+  // without forward-referencing.
+  const leasedSpaceIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const lease of (leasesQuery.data ?? []) as LeaseRow[]) {
+      s.add(lease.space_id);
+    }
+    return s;
+  }, [leasesQuery.data]);
+
   const heroBuildings = useMemo(() => {
     return ((buildingsQuery.data ?? []) as MapBuildingRow[]).map((b) => ({
       id: b.id,
@@ -190,9 +202,10 @@ export default function ProjectDetailPage({
               | "rear-right"
               | null) ?? null,
           tenantColor: tenantColorBySpaceId.get(s.id) ?? null,
+          isLeased: leasedSpaceIds.has(s.id),
         })),
     }));
-  }, [buildingsQuery.data, tenantColorBySpaceId]);
+  }, [buildingsQuery.data, tenantColorBySpaceId, leasedSpaceIds]);
 
   // Site-amenity inputs for the hero overlay (docks + drive-ins + truck
   // courts). Each building maps its bays + truck_court_depth_ft into the

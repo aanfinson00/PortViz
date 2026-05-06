@@ -78,6 +78,17 @@ export function PropertyHero({
     parking: true,
     yard: true,
   });
+  // "Show only available" filter — drops slabs flagged isLeased from the
+  // 3D render. Pure UI state; the helper does the actual filtering.
+  const [hideLeased, setHideLeased] = useState(false);
+
+  // True when at least one space across the property carries leased
+  // info — controls whether we surface the toggle at all (no point
+  // showing it when every building is bay-mode with no spaces yet).
+  const filterAvailable = useMemo(
+    () => buildings.some((b) => b.spaces.some((s) => s.isLeased != null)),
+    [buildings],
+  );
 
   const overlayLayers = useMemo(() => {
     const layers: OverlayLayer[] = [];
@@ -100,8 +111,8 @@ export function PropertyHero({
   );
 
   const mapBuildings: BuildingGeom[] = useMemo(
-    () => buildings.flatMap(buildBuildingMapGeoms),
-    [buildings],
+    () => buildings.flatMap((b) => buildBuildingMapGeoms(b, { hideLeased })),
+    [buildings, hideLeased],
   );
 
   // Union bbox across every building's footprint *and* the parcel polygon
@@ -171,10 +182,36 @@ export function PropertyHero({
           parkingKind={projectAmenities?.parking?.[0]?.kind ?? null}
         />
       )}
+      {filterAvailable && (
+        <button
+          type="button"
+          onClick={() => setHideLeased((x) => !x)}
+          aria-pressed={hideLeased}
+          className={`absolute right-12 top-2 z-10 rounded-md border px-2.5 py-1 text-[11px] font-medium shadow-sm backdrop-blur transition ${
+            hideLeased
+              ? "border-emerald-700 bg-emerald-700 text-white"
+              : "border-neutral-200 bg-white/95 text-neutral-700 hover:bg-neutral-50"
+          }`}
+          title={
+            hideLeased
+              ? "Showing only vacant / available / pending spaces"
+              : "Click to hide leased slabs"
+          }
+        >
+          {hideLeased ? "Available only ✓" : "Available only"}
+        </button>
+      )}
       {isLoading && mapBuildings.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/40 backdrop-blur-sm">
           <div className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm">
             Loading site…
+          </div>
+        </div>
+      )}
+      {filterAvailable && hideLeased && mapBuildings.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/40">
+          <div className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm">
+            Nothing available at this property right now.
           </div>
         </div>
       )}

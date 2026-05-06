@@ -239,6 +239,129 @@ describe("buildBuildingMapGeoms", () => {
     expect(out[0]?.color).not.toBe("#ff0000");
   });
 
+  it("hideLeased: drops leased slabs in slider mode but keeps vacant ones", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({
+        demisingMode: "sliders",
+        spaces: [
+          {
+            id: "s1",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            isLeased: true,
+          },
+          {
+            id: "s2",
+            positionOrder: 1,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            isLeased: false,
+          },
+        ],
+      }),
+      { hideLeased: true },
+    );
+    // Only the vacant slab (s2) should render; its label includes the id.
+    expect(out.every((g) => !g.code.includes("-s1-"))).toBe(true);
+    expect(out.some((g) => g.code.includes("-s2-"))).toBe(true);
+  });
+
+  it("hideLeased: drops both warehouse + office of a leased slab", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({
+        demisingMode: "sliders",
+        spaces: [
+          {
+            id: "s1",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: 5_000_000,
+            officeCorner: "front-left",
+            isLeased: true,
+          },
+          {
+            id: "s2",
+            positionOrder: 1,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            isLeased: false,
+          },
+        ],
+      }),
+      { hideLeased: true },
+    );
+    expect(out.some((g) => g.code.includes("-s1-of"))).toBe(false);
+    expect(out.some((g) => g.code.includes("-s1-wh-"))).toBe(false);
+  });
+
+  it("hideLeased: skips bay-mode buildings with every space leased", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({
+        demisingMode: "bays",
+        spaces: [
+          {
+            id: "s1",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            isLeased: true,
+          },
+        ],
+      }),
+      { hideLeased: true },
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("hideLeased: bay-mode building still renders if any space is unleased", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({
+        demisingMode: "bays",
+        spaces: [
+          {
+            id: "s1",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            isLeased: true,
+          },
+          {
+            id: "s2",
+            positionOrder: 0,
+            isPinned: false,
+            targetSf: null,
+            officeSf: null,
+            officeCorner: null,
+            isLeased: false,
+          },
+        ],
+      }),
+      { hideLeased: true },
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]?.id).toBe("b1");
+  });
+
+  it("hideLeased: bay-mode building with no spaces stays rendered (raw building)", () => {
+    const out = buildBuildingMapGeoms(
+      baseBuilding({ demisingMode: "bays", spaces: [] }),
+      { hideLeased: true },
+    );
+    expect(out).toHaveLength(1);
+  });
+
   it("uses the bays' frontage_side to orient slab slicing", () => {
     // We can't easily assert orientation here without re-implementing the
     // slicer, but at minimum the helper shouldn't blow up when bays carry
