@@ -6,6 +6,7 @@ import { CompAssignModal } from "@/components/comps/CompAssignModal";
 import { CompLocateModal } from "@/components/comps/CompLocateModal";
 import { toastError, toastInfo, toastSuccess } from "@/components/ui/Toaster";
 import { parseCompsXlsx, type ParsedComp } from "@/lib/compImport";
+import { geocodeBatch } from "@/lib/geocode";
 import { api } from "@/lib/trpc/react";
 
 type CompRow = {
@@ -36,6 +37,10 @@ export default function CompsPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [assignTarget, setAssignTarget] = useState<CompRow | null>(null);
   const [locateTarget, setLocateTarget] = useState<CompRow | null>(null);
+  const [geocoding, setGeocoding] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   const bulkInsert = api.comp.bulkInsert.useMutation({
     onSuccess: async (res) => {
@@ -66,26 +71,72 @@ export default function CompsPage() {
         toastError("No usable rows in that file.");
         return;
       }
+
+      // Geocode rows that have an address but no explicit lng/lat. We do
+      // this client-side in parallel batches so the user sees a live
+      // progress indicator and the resulting coords get inserted with
+      // the row in a single bulkInsert call.
+      const queries = parsed.comps.map((c) => {
+        if (c.lng != null && c.lat != null) return null;
+        const parts = [c.address, c.city, c.state].filter(Boolean);
+        return parts.length > 0 ? parts.join(", ") : null;
+      });
+      const needsGeocode = queries.filter(Boolean).length;
+      let geocodedCount = 0;
+      let resolved: Array<{ lng: number; lat: number } | null> = [];
+      if (needsGeocode > 0) {
+        setGeocoding({ done: 0, total: needsGeocode });
+        // Walk the queries through the batch helper; null entries (rows
+        // already located) cost zero requests.
+        resolved = await geocodeBatch(queries, {
+          concurrency: 4,
+          onProgress: (done, total) => {
+            // The helper reports progress over every entry incl. nulls;
+            // we only want to surface count over rows that actually
+            // dispatched a request, so derive that from the non-null
+            // count up to this point. Approximation is fine for UI.
+            void total;
+            geocodedCount = Math.min(done, needsGeocode);
+            setGeocoding({ done: geocodedCount, total: needsGeocode });
+          },
+        });
+        const located = resolved.filter(Boolean).length;
+        setGeocoding(null);
+        if (located > 0) {
+          toastInfo(
+            `Geocoded ${located} of ${needsGeocode} address${needsGeocode === 1 ? "" : "es"}`,
+          );
+        } else if (needsGeocode > 0) {
+          toastInfo(
+            "Couldn't geocode any addresses — drop pins manually via Locate.",
+          );
+        }
+      }
+
       bulkInsert.mutate({
-        comps: parsed.comps.map((c: ParsedComp) => ({
-          kind: c.kind,
-          tenantName: c.tenantName,
-          buildingName: c.buildingName,
-          address: c.address,
-          city: c.city,
-          state: c.state,
-          lng: c.lng,
-          lat: c.lat,
-          sf: c.sf,
-          rentPsf: c.rentPsf,
-          leaseType: c.leaseType,
-          termMonths: c.termMonths,
-          dealDate: c.dealDate,
-          source: c.source,
-          notes: c.notes,
-        })),
+        comps: parsed.comps.map((c: ParsedComp, i) => {
+          const fallback = resolved[i];
+          return {
+            kind: c.kind,
+            tenantName: c.tenantName,
+            buildingName: c.buildingName,
+            address: c.address,
+            city: c.city,
+            state: c.state,
+            lng: c.lng ?? fallback?.lng ?? null,
+            lat: c.lat ?? fallback?.lat ?? null,
+            sf: c.sf,
+            rentPsf: c.rentPsf,
+            leaseType: c.leaseType,
+            termMonths: c.termMonths,
+            dealDate: c.dealDate,
+            source: c.source,
+            notes: c.notes,
+          };
+        }),
       });
     } catch (err) {
+      setGeocoding(null);
       toastError(
         err instanceof Error ? err.message : "Couldn't read that file.",
       );
@@ -142,10 +193,14 @@ export default function CompsPage() {
           />
           <button
             onClick={() => fileRef.current?.click()}
-            disabled={bulkInsert.isPending}
+            disabled={bulkInsert.isPending || geocoding != null}
             className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
           >
-            {bulkInsert.isPending ? "Importing…" : "Upload comps"}
+            {geocoding
+              ? `Geocoding ${geocoding.done}/${geocoding.total}…`
+              : bulkInsert.isPending
+                ? "Importing…"
+                : "Upload comps"}
           </button>
         </div>
       </header>
@@ -173,6 +228,13 @@ export default function CompsPage() {
           <code className="rounded bg-white px-1">notes</code>. A row needs at
           least one of (tenant_name / building_name / address) plus sf or
           rent_psf.
+        </p>
+        <p className="mt-2 leading-relaxed">
+          Rows with an address but no <code className="rounded bg-white px-1">lng</code>/
+          <code className="rounded bg-white px-1">lat</code> are auto-geocoded
+          via Mapbox during upload. Anything that doesn&rsquo;t resolve gets
+          a missing-coords flag &mdash; drop a pin manually via the row&rsquo;s
+          Locate button.
         </p>
       </details>
 
