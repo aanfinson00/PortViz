@@ -173,18 +173,52 @@ export const compRouter = router({
       return { inserted: data?.length ?? 0 };
     }),
 
+  /**
+   * Partial-update a comp. Only fields explicitly present on the input
+   * are patched; omitted fields are left alone. This is what lets the
+   * Locate modal save just `{ id, lng, lat }` without nuking the comp's
+   * tenant_name / sf / etc.
+   */
   update: editorProcedure
-    .input(compInput.extend({ id: z.string().uuid() }))
+    .input(
+      compInput
+        .partial()
+        .extend({
+          id: z.string().uuid(),
+          // Override kind so the .default("lease") on compInput doesn't
+          // resurrect itself when the caller omits it.
+          kind: z.enum(["lease", "sale"]).optional(),
+        }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { id, ...rest } = input;
-      const patch = rowToInsert(ctx.orgId, ctx.user.id, rest);
-      // Don't overwrite created_by / org_id on update.
-      const { org_id, created_by, ...updateFields } = patch;
-      void org_id;
-      void created_by;
+      // Build a patch from only the keys the caller explicitly sent.
+      const FIELD_MAP: Record<string, string> = {
+        kind: "kind",
+        tenantName: "tenant_name",
+        buildingName: "building_name",
+        address: "address",
+        city: "city",
+        state: "state",
+        lng: "lng",
+        lat: "lat",
+        sf: "sf",
+        rentPsf: "rent_psf",
+        leaseType: "lease_type",
+        termMonths: "term_months",
+        dealDate: "deal_date",
+        source: "source",
+        notes: "notes",
+      };
+      const patch: Record<string, unknown> = {};
+      for (const [camel, col] of Object.entries(FIELD_MAP)) {
+        const v = (rest as Record<string, unknown>)[camel];
+        if (v !== undefined) patch[col] = v;
+      }
+      patch.updated_at = new Date().toISOString();
       const { data, error } = await ctx.supabase
         .from("comp")
-        .update({ ...updateFields, updated_at: new Date().toISOString() })
+        .update(patch)
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .select()

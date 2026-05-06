@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { CompAssignModal } from "@/components/comps/CompAssignModal";
+import { CompLocateModal } from "@/components/comps/CompLocateModal";
 import { toastError, toastInfo, toastSuccess } from "@/components/ui/Toaster";
 import { parseCompsXlsx, type ParsedComp } from "@/lib/compImport";
 import { api } from "@/lib/trpc/react";
@@ -34,6 +35,7 @@ export default function CompsPage() {
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [assignTarget, setAssignTarget] = useState<CompRow | null>(null);
+  const [locateTarget, setLocateTarget] = useState<CompRow | null>(null);
 
   const bulkInsert = api.comp.bulkInsert.useMutation({
     onSuccess: async (res) => {
@@ -91,15 +93,26 @@ export default function CompsPage() {
   }
 
   const rows = (compsQuery.data ?? []) as CompRow[];
-  const projects = (projectsQuery.data ?? []) as Array<{
+  type ProjectRow = {
     id: string;
     code: string;
     name: string;
-  }>;
+    lng?: number | null;
+    lat?: number | null;
+  };
+  const projects = (projectsQuery.data ?? []) as ProjectRow[];
   const projectByID = useMemo(() => {
     const m = new Map<string, { code: string; name: string }>();
     for (const p of projects) m.set(p.id, { code: p.code, name: p.name });
     return m;
+  }, [projects]);
+  // Use the first geocoded project as the "center on this part of the
+  // world" hint when a comp has no coords yet.
+  const firstProjectCenter = useMemo<[number, number] | null>(() => {
+    for (const p of projects) {
+      if (p.lng != null && p.lat != null) return [p.lng, p.lat];
+    }
+    return null;
   }, [projects]);
 
   return (
@@ -257,6 +270,23 @@ export default function CompsPage() {
                     <td className="px-3 py-2 text-right text-xs">
                       <div className="flex justify-end gap-3">
                         <button
+                          onClick={() => setLocateTarget(c)}
+                          className={
+                            c.lng != null && c.lat != null
+                              ? "text-neutral-500 hover:text-neutral-800 hover:underline"
+                              : "font-medium text-amber-600 hover:underline"
+                          }
+                          title={
+                            c.lng != null && c.lat != null
+                              ? "Adjust pin location"
+                              : "Drop a pin so this comp shows on the flow map"
+                          }
+                        >
+                          {c.lng != null && c.lat != null
+                            ? "Locate"
+                            : "Locate ⚠"}
+                        </button>
+                        <button
                           onClick={() => setAssignTarget(c)}
                           className="text-blue-600 hover:underline"
                         >
@@ -300,6 +330,29 @@ export default function CompsPage() {
           }}
           projects={projects}
           onClose={() => setAssignTarget(null)}
+        />
+      )}
+
+      {locateTarget && (
+        <CompLocateModal
+          comp={{
+            id: locateTarget.id,
+            label:
+              locateTarget.tenant_name ??
+              locateTarget.building_name ??
+              "(unnamed)",
+            addressLine: [
+              locateTarget.address,
+              locateTarget.city,
+              locateTarget.state,
+            ]
+              .filter(Boolean)
+              .join(", ") || null,
+            initialLng: locateTarget.lng,
+            initialLat: locateTarget.lat,
+          }}
+          fallbackCenter={firstProjectCenter}
+          onClose={() => setLocateTarget(null)}
         />
       )}
     </main>
