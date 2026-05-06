@@ -207,12 +207,22 @@ export function RentRoll({ buildingId, projectCode, buildingCode }: RentRollProp
                   />
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <Link
-                    href={`/app/projects/${projectCode}/buildings/${buildingCode}/spaces/${s.code}`}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Open →
-                  </Link>
+                  <span className="flex items-center justify-end gap-2 text-xs">
+                    {lease && (
+                      <Link
+                        href={`/app/leases/${lease.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Lease →
+                      </Link>
+                    )}
+                    <Link
+                      href={`/app/projects/${projectCode}/buildings/${buildingCode}/spaces/${s.code}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      Space →
+                    </Link>
+                  </span>
                 </td>
               </tr>
             );

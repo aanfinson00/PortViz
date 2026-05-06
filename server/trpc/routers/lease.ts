@@ -152,6 +152,98 @@ export const leaseRouter = router({
       return fallback.data ?? [];
     }),
 
+  /**
+   * Full lease detail: the lease itself, the tenant, the space + building
+   * + project for breadcrumbs and links, the parent lease (when this is a
+   * renewal), and any child leases (renewals that point at this one).
+   * Driven by /app/leases/[id]/page.tsx.
+   */
+  byId: orgProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const augmented = `id, start_date, end_date, commencement_date, base_rent_psf, escalation_pct, term_months,
+         ti_allowance_psf, free_rent_months, commission_psf, security_deposit, notes,
+         lease_type, rent_schedule, options, parent_lease_id,
+         tenant:tenant_id ( id, code, name, brand_color, contact_name, contact_email, contact_phone ),
+         space:space_id (
+           id, code, status, target_sf,
+           building:building_id (
+             id, code, name,
+             project:project_id ( id, code, name )
+           )
+         )`;
+      const core = `id, start_date, end_date, commencement_date, base_rent_psf, escalation_pct, term_months,
+         ti_allowance_psf, free_rent_months, commission_psf, security_deposit, notes,
+         tenant:tenant_id ( id, code, name, brand_color, contact_name, contact_email, contact_phone ),
+         space:space_id (
+           id, code, status, target_sf,
+           building:building_id (
+             id, code, name,
+             project:project_id ( id, code, name )
+           )
+         )`;
+      const tryQuery = (select: string) =>
+        ctx.supabase
+          .from("lease")
+          .select(select)
+          .eq("org_id", ctx.orgId)
+          .eq("id", input.id)
+          .maybeSingle();
+
+      const first = await tryQuery(augmented);
+      let lease: Record<string, unknown> | null;
+      if (!first.error) {
+        lease = (first.data ?? null) as unknown as Record<string, unknown> | null;
+      } else {
+        const msg = first.error.message ?? "";
+        const looksMissing =
+          first.error.code === "42703" ||
+          first.error.code === "PGRST204" ||
+          /column .* does not exist/i.test(msg) ||
+          /could not find .* column/i.test(msg) ||
+          /schema cache/i.test(msg);
+        if (!looksMissing) throw first.error;
+        const fallback = await tryQuery(core);
+        if (fallback.error) throw fallback.error;
+        const data = (fallback.data ?? null) as unknown as Record<
+          string,
+          unknown
+        > | null;
+        lease = data
+          ? {
+              ...data,
+              lease_type: null,
+              rent_schedule: null,
+              options: null,
+              parent_lease_id: null,
+            }
+          : null;
+      }
+      if (!lease) return null;
+
+      // Children: leases that have THIS one as parent. Cheap query; if 0014
+      // isn't applied the parent_lease_id column doesn't exist and we
+      // simply skip the lookup.
+      let children: Array<{
+        id: string;
+        start_date: string;
+        end_date: string;
+      }> = [];
+      const childrenRes = await ctx.supabase
+        .from("lease")
+        .select("id, start_date, end_date")
+        .eq("org_id", ctx.orgId)
+        .eq("parent_lease_id", input.id)
+        .order("start_date");
+      if (!childrenRes.error) {
+        children = childrenRes.data ?? [];
+      } else {
+        // Likely missing column; ignore.
+      }
+
+      return { lease, children };
+    }),
+
   create: editorProcedure.input(leaseInput).mutation(async ({ ctx, input }) => {
     const row = leaseInsertRow(ctx.orgId, input);
     const { data, error } = await ctx.supabase

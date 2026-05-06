@@ -259,14 +259,22 @@ export default function TenantDetailPage({
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {url && (
+                            <span className="flex items-center justify-end gap-2 text-xs">
                               <Link
-                                href={url}
-                                className="text-xs text-blue-600 hover:underline"
+                                href={`/app/leases/${l.id}`}
+                                className="text-blue-600 hover:underline"
                               >
-                                Open →
+                                Lease →
                               </Link>
-                            )}
+                              {url && (
+                                <Link
+                                  href={url}
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  Space →
+                                </Link>
+                              )}
+                            </span>
                           </td>
                         </tr>
                       );
