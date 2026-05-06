@@ -34,6 +34,12 @@ type ListForMapRow = {
     is_pinned: boolean | null;
     office_sf: number | null;
     office_corner: string | null;
+    asking_rent_psf: number | null;
+    opex_psf_year_one: number | null;
+    available_date: string | null;
+    min_divisibility_sf: number | null;
+    max_divisibility_sf: number | null;
+    marketing_description: string | null;
     space_bay: Array<{ bay_id: string }>;
   }>;
 };
@@ -103,7 +109,7 @@ export const buildingRouter = router({
     .query(async ({ ctx, input }): Promise<ListForMapRow[]> => {
       const augmented = `id, code, name, footprint_geojson, height_ft, truck_court_depth_ft, demising_mode,
          bay (id, ordinal, width_ft, depth_ft, dock_door_count, drive_in_count, has_yard_access, frontage_side),
-         space (id, code, status, target_sf, position_order, is_pinned, office_sf, office_corner, space_bay (bay_id))`;
+         space (id, code, status, target_sf, position_order, is_pinned, office_sf, office_corner, asking_rent_psf, opex_psf_year_one, available_date, min_divisibility_sf, max_divisibility_sf, marketing_description, space_bay (bay_id))`;
       const core = `id, code, name, footprint_geojson, height_ft,
          bay (id, ordinal, width_ft, depth_ft, dock_door_count, drive_in_count, has_yard_access, frontage_side),
          space (id, code, status, space_bay (bay_id))`;
@@ -147,7 +153,17 @@ export const buildingRouter = router({
           space: Array<
             Omit<
               ListForMapRow["space"][number],
-              "target_sf" | "position_order" | "is_pinned" | "office_sf" | "office_corner"
+              | "target_sf"
+              | "position_order"
+              | "is_pinned"
+              | "office_sf"
+              | "office_corner"
+              | "asking_rent_psf"
+              | "opex_psf_year_one"
+              | "available_date"
+              | "min_divisibility_sf"
+              | "max_divisibility_sf"
+              | "marketing_description"
             >
           >;
         }
@@ -167,6 +183,12 @@ export const buildingRouter = router({
           is_pinned: null,
           office_sf: null,
           office_corner: null,
+          asking_rent_psf: null,
+          opex_psf_year_one: null,
+          available_date: null,
+          min_divisibility_sf: null,
+          max_divisibility_sf: null,
+          marketing_description: null,
         })),
       }));
     }),

@@ -4,6 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShortcutLabel } from "@/components/layout/useShortcutLabel";
 import { rankFuzzy } from "@/lib/fuzzy";
+import {
+  matchesFilters,
+  parseQuery,
+  STATUS_LABEL,
+  TYPE_LABEL,
+} from "@/lib/searchFilters";
 import { api } from "@/lib/trpc/react";
 
 type Item = {
@@ -14,6 +20,7 @@ type Item = {
   sublabel?: string;
   url: string;
   brandColor?: string;
+  status?: string;
 };
 
 const TYPE_LABELS: Record<Item["type"], string> = {
@@ -52,7 +59,6 @@ export function CommandPalette() {
   // Focus the input when opened.
   useEffect(() => {
     if (open) {
-      // Defer until the modal is mounted.
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -65,11 +71,15 @@ export function CommandPalette() {
   });
 
   const items = (search.data ?? []) as Item[];
-  const ranked = useMemo(
-    () =>
-      rankFuzzy(items, query, (it) => [it.label, it.code, it.sublabel ?? null]),
-    [items, query],
-  );
+  const parsed = useMemo(() => parseQuery(query), [query]);
+  const ranked = useMemo(() => {
+    const filtered = items.filter((it) => matchesFilters(it, parsed));
+    return rankFuzzy(filtered, parsed.text, (it) => [
+      it.label,
+      it.code,
+      it.sublabel ?? null,
+    ]);
+  }, [items, parsed]);
 
   // Clamp the active index when the result list changes.
   useEffect(() => {
@@ -97,6 +107,15 @@ export function CommandPalette() {
     }
   }
 
+  function clearFilters() {
+    // Strip recognized filter keywords from the input but keep the
+    // free-text portion so the user doesn't lose their typing.
+    setQuery(parsed.text);
+    inputRef.current?.focus();
+  }
+
+  const hasFilters = parsed.statuses.length > 0 || parsed.type !== null;
+
   return (
     <div
       className="fixed inset-0 z-[200] flex items-start justify-center bg-neutral-900/40 px-4 pt-24 backdrop-blur-sm"
@@ -111,9 +130,34 @@ export function CommandPalette() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Search projects, buildings, spaces, tenants…"
+          placeholder="Search… try ‘vacant’, ‘leased buildings’, or a tenant name"
           className="block w-full border-b border-neutral-200 px-4 py-3 text-sm focus:outline-none"
         />
+        {hasFilters && (
+          <div className="flex items-center gap-1.5 border-b border-neutral-100 bg-neutral-50 px-3 py-1.5 text-[11px]">
+            <span className="text-neutral-500">Filters:</span>
+            {parsed.statuses.map((s) => (
+              <span
+                key={s}
+                className="rounded-full border border-neutral-300 bg-white px-1.5 py-0.5 font-medium text-neutral-700"
+              >
+                {STATUS_LABEL[s]}
+              </span>
+            ))}
+            {parsed.type && (
+              <span className="rounded-full border border-neutral-300 bg-white px-1.5 py-0.5 font-medium text-neutral-700">
+                {TYPE_LABEL[parsed.type]}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-1 text-neutral-500 hover:text-neutral-800"
+            >
+              clear
+            </button>
+          </div>
+        )}
         <div className="max-h-[50vh] overflow-y-auto">
           {search.isLoading ? (
             <p className="px-4 py-3 text-sm text-neutral-500">Loading…</p>

@@ -74,6 +74,7 @@ export const searchRouter = router({
             label: `Space ${s.code}`,
             sublabel: `${p.code}-${b.code}-${s.code} · ${s.status}`,
             url: `/app/projects/${p.code}/buildings/${b.code}/spaces/${s.code}`,
+            status: s.status,
           });
         }
       }
@@ -101,4 +102,6 @@ export type SearchItem = {
   sublabel?: string;
   url: string;
   brandColor?: string;
+  /** Space status for filter chips (vacant / available / pending / leased). */
+  status?: string;
 };

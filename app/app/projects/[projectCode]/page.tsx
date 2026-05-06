@@ -63,6 +63,12 @@ type MapBuildingRow = {
     is_pinned: boolean | null;
     office_sf: number | null;
     office_corner: string | null;
+    asking_rent_psf: number | null;
+    opex_psf_year_one: number | null;
+    available_date: string | null;
+    min_divisibility_sf: number | null;
+    max_divisibility_sf: number | null;
+    marketing_description: string | null;
     space_bay: Array<{ bay_id: string }>;
   }>;
 };
@@ -240,6 +246,10 @@ export default function ProjectDetailPage({
     bayIds: string[];
     tenantColor: string | null;
     tenantName: string | null;
+    askingRentPsf: number | null;
+    availableDate: string | null;
+    minDivisibilitySf: number | null;
+    maxDivisibilitySf: number | null;
   };
   const cards = useMemo(() => {
     return ((buildingsQuery.data ?? []) as MapBuildingRow[]).map((b) => {
@@ -264,6 +274,11 @@ export default function ProjectDetailPage({
           bayIds: s.space_bay.map((sb) => sb.bay_id),
           tenantColor: tenant?.brand_color ?? null,
           tenantName: tenant?.name ?? null,
+          askingRentPsf:
+            s.asking_rent_psf != null ? Number(s.asking_rent_psf) : null,
+          availableDate: s.available_date,
+          minDivisibilitySf: s.min_divisibility_sf,
+          maxDivisibilitySf: s.max_divisibility_sf,
         };
       });
       return {
@@ -351,6 +366,10 @@ export default function ProjectDetailPage({
       projectCode: string;
       status: "vacant" | "available" | "pending";
       sf: number;
+      askingRentPsf: number | null;
+      availableDate: string | null;
+      minDivisibilitySf: number | null;
+      maxDivisibilitySf: number | null;
     }> = [];
     for (const card of cards) {
       const bayById = new Map(card.bays.map((b) => [b.id, b]));
@@ -372,6 +391,10 @@ export default function ProjectDetailPage({
           projectCode: project.data?.code ?? "",
           status: s.status as "vacant" | "available" | "pending",
           sf,
+          askingRentPsf: s.askingRentPsf,
+          availableDate: s.availableDate,
+          minDivisibilitySf: s.minDivisibilitySf,
+          maxDivisibilitySf: s.maxDivisibilitySf,
         });
         // bayById is referenced via the helper indirectly; keep so the
         // memoization treats card.bays as a dep cleanly.

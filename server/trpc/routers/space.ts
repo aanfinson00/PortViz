@@ -74,6 +74,13 @@ export const spaceRouter = router({
           .optional(),
         target_sf: z.number().int().min(0).nullable().optional(),
         notes: z.string().max(2000).nullable().optional(),
+        // Listing data (migration 0015)
+        asking_rent_psf: z.number().min(0).nullable().optional(),
+        opex_psf_year_one: z.number().min(0).nullable().optional(),
+        available_date: z.string().nullable().optional(),
+        min_divisibility_sf: z.number().int().min(0).nullable().optional(),
+        max_divisibility_sf: z.number().int().min(0).nullable().optional(),
+        marketing_description: z.string().max(5000).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -89,7 +96,22 @@ export const spaceRouter = router({
         .eq("org_id", ctx.orgId)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        const msg = error.message ?? "";
+        const isMissingColumn =
+          error.code === "42703" ||
+          error.code === "PGRST204" ||
+          /column .* does not exist/i.test(msg) ||
+          /could not find .* column/i.test(msg) ||
+          /schema cache/i.test(msg);
+        if (isMissingColumn) {
+          throw new Error(
+            "Listing fields aren't in your database yet. Apply migration 0015 in the Supabase SQL editor, then try again. Original: " +
+              msg,
+          );
+        }
+        throw error;
+      }
       return data;
     }),
 

@@ -5,6 +5,7 @@ import { use, useState } from "react";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { DocumentUpload } from "@/components/docs/DocumentUpload";
 import { LeaseForm } from "@/components/lease/LeaseForm";
+import { ListingPanel } from "@/components/space/ListingPanel";
 import { api } from "@/lib/trpc/react";
 
 export default function SpaceDetailPage({
@@ -80,6 +81,50 @@ export default function SpaceDetailPage({
               <span className="font-medium">{data.space.status}</span>
             </p>
           </header>
+
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold">Listing</h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              Asking rent, divisibility, and the marketing blurb for this
+              space. Surfaces on the property dashboard&rsquo;s Available
+              tab.
+            </p>
+            <div className="mt-4">
+              <ListingPanel
+                spaceId={data.space.id}
+                initial={{
+                  askingRentPsf:
+                    (data.space as { asking_rent_psf?: number | string | null })
+                      .asking_rent_psf != null
+                      ? Number(
+                          (data.space as { asking_rent_psf: number | string })
+                            .asking_rent_psf,
+                        )
+                      : null,
+                  opexPsfYearOne:
+                    (data.space as { opex_psf_year_one?: number | string | null })
+                      .opex_psf_year_one != null
+                      ? Number(
+                          (data.space as { opex_psf_year_one: number | string })
+                            .opex_psf_year_one,
+                        )
+                      : null,
+                  availableDate:
+                    (data.space as { available_date?: string | null })
+                      .available_date ?? null,
+                  minDivisibilitySf:
+                    (data.space as { min_divisibility_sf?: number | null })
+                      .min_divisibility_sf ?? null,
+                  maxDivisibilitySf:
+                    (data.space as { max_divisibility_sf?: number | null })
+                      .max_divisibility_sf ?? null,
+                  marketingDescription:
+                    (data.space as { marketing_description?: string | null })
+                      .marketing_description ?? null,
+                }}
+              />
+            </div>
+          </section>
 
           <section className="mt-10">
             <div className="flex items-center justify-between">

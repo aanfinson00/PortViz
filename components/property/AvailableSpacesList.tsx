@@ -9,6 +9,10 @@ export interface AvailableSpaceRow {
   projectCode: string;
   status: "vacant" | "available" | "pending";
   sf: number;
+  askingRentPsf: number | null;
+  availableDate: string | null;
+  minDivisibilitySf: number | null;
+  maxDivisibilitySf: number | null;
 }
 
 interface Props {
@@ -27,13 +31,20 @@ const STATUS_TONE: Record<AvailableSpaceRow["status"], string> = {
   pending: "bg-amber-50 text-amber-700",
 };
 
+function formatDivisibility(min: number | null, max: number | null): string {
+  if (min == null && max == null) return "—";
+  if (min != null && max != null) {
+    if (min === max) return min.toLocaleString();
+    return `${min.toLocaleString()}–${max.toLocaleString()}`;
+  }
+  if (min != null) return `≥ ${min.toLocaleString()}`;
+  return `≤ ${(max as number).toLocaleString()}`;
+}
+
 /**
  * Lists every space at the property whose status is vacant / available /
  * pending. Sorted by SF descending — biggest blocks float to the top so
  * a broker scanning for a 200k-SF tenant sees their candidates first.
- *
- * Asking rent / available date / divisibility columns are deferred until
- * the listing-data schema lands — v1 just covers what's leasable.
  */
 export function AvailableSpacesList({ rows }: Props) {
   if (rows.length === 0) {
@@ -61,6 +72,9 @@ export function AvailableSpacesList({ rows }: Props) {
           <tr>
             <th className="px-3 py-2">Space</th>
             <th className="px-3 py-2">SF</th>
+            <th className="px-3 py-2">Asking</th>
+            <th className="px-3 py-2">Avail.</th>
+            <th className="px-3 py-2">Divisibility</th>
             <th className="px-3 py-2">Status</th>
             <th className="px-3 py-2 text-right"></th>
           </tr>
@@ -73,6 +87,17 @@ export function AvailableSpacesList({ rows }: Props) {
               </td>
               <td className="px-3 py-2 tabular-nums">
                 {r.sf > 0 ? r.sf.toLocaleString() : "—"}
+              </td>
+              <td className="px-3 py-2 tabular-nums">
+                {r.askingRentPsf != null
+                  ? `$${r.askingRentPsf.toFixed(2)}`
+                  : <span className="text-neutral-400">—</span>}
+              </td>
+              <td className="px-3 py-2 text-xs">
+                {r.availableDate ?? <span className="text-neutral-400">—</span>}
+              </td>
+              <td className="px-3 py-2 tabular-nums text-xs">
+                {formatDivisibility(r.minDivisibilitySf, r.maxDivisibilitySf)}
               </td>
               <td className="px-3 py-2">
                 <span
