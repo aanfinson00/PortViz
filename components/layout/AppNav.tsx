@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 const LINKS = [
   { href: "/app", label: "Portfolio" },
   { href: "/app/tenants", label: "Tenants" },
+  { href: "/app/comps", label: "Comps" },
   { href: "/app/import", label: "Bulk import" },
   { href: "/app/settings", label: "Settings" },
 ] as const;

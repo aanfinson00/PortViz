@@ -13,6 +13,7 @@ import { authRouter } from "./routers/auth";
 import { eventRouter } from "./routers/event";
 import { metricsRouter } from "./routers/metrics";
 import { searchRouter } from "./routers/search";
+import { compRouter } from "./routers/comp";
 
 export const appRouter = router({
   auth: authRouter,
@@ -29,6 +30,7 @@ export const appRouter = router({
   org: orgRouter,
   share: shareRouter,
   search: searchRouter,
+  comp: compRouter,
 });
 
 export type AppRouter = typeof appRouter;

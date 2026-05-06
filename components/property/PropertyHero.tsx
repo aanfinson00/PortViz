@@ -22,6 +22,7 @@ import {
   buildBuildingMapGeoms,
   type BuildingForRendering,
 } from "@/lib/buildingMapGeoms";
+import type { OverlayLayer } from "@/components/map/BuildingExtrusionMap";
 
 interface PropertyHeroProps {
   /**
@@ -47,6 +48,13 @@ interface PropertyHeroProps {
   projectAmenities?: ProjectAmenityInput;
   /** Show a translucent overlay over the map while data is loading. */
   isLoading?: boolean;
+  /**
+   * Caller-supplied overlay layers (comp pins, flow lines, etc.) appended
+   * to whatever the hero builds from `amenities` / `projectAmenities`.
+   * Tracked separately so we don't have to teach the hero about every
+   * upstream domain concept.
+   */
+  extraOverlays?: OverlayLayer[];
 }
 
 /**
@@ -60,6 +68,7 @@ export function PropertyHero({
   amenities,
   projectAmenities,
   isLoading = false,
+  extraOverlays,
 }: PropertyHeroProps) {
   const [toggles, setToggles] = useState<AllAmenityToggles>({
     docks: true,
@@ -71,13 +80,14 @@ export function PropertyHero({
   });
 
   const overlayLayers = useMemo(() => {
-    const layers = [];
+    const layers: OverlayLayer[] = [];
     if (amenities) layers.push(...buildAmenityLayers(amenities, toggles));
     if (projectAmenities) {
       layers.push(...buildProjectAmenityLayers(projectAmenities, toggles));
     }
+    if (extraOverlays) layers.push(...extraOverlays);
     return layers.length > 0 ? layers : undefined;
-  }, [amenities, projectAmenities, toggles]);
+  }, [amenities, projectAmenities, toggles, extraOverlays]);
 
   const available = useMemo(
     () => ({

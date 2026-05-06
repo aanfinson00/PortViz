@@ -11,9 +11,15 @@ import { ActivityFeed } from "@/components/property/ActivityFeed";
 import { AvailableSpacesList } from "@/components/property/AvailableSpacesList";
 import { ExpirationsList } from "@/components/property/ExpirationsList";
 import { KPIStrip } from "@/components/property/KPIStrip";
+import { ProjectComps } from "@/components/property/ProjectComps";
 import { PropertyHero } from "@/components/property/PropertyHero";
 import { PropertyTabs } from "@/components/property/PropertyTabs";
 import { TenantsList } from "@/components/property/TenantsList";
+import {
+  buildCompFlowLayers,
+  COMP_FLOW_LINE_PAINT,
+  COMP_PIN_PAINT,
+} from "@/lib/compFlowLayers";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
 import type { Bay, FrontageSide } from "@/lib/demising";
 import {
@@ -409,6 +415,63 @@ export default function ProjectDetailPage({
       ? [project.data.lng, project.data.lat]
       : null;
 
+  // Comps assigned to this property. Drives the Comps tab + the flow-map
+  // overlay on the hero. Fetched only after we have a project id.
+  const compsQuery = api.comp.listForProject.useQuery(
+    { projectId },
+    { enabled, retry: false },
+  );
+  type CompRow = {
+    id: string;
+    tenant_name: string | null;
+    building_name: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    sf: number | null;
+    rent_psf: number | string | null;
+    lease_type: string | null;
+    term_months: number | null;
+    deal_date: string | null;
+    lng: number | null;
+    lat: number | null;
+  };
+  const projectComps = (compsQuery.data ?? []) as CompRow[];
+
+  const compFlowOverlays = useMemo(() => {
+    if (!fallbackCenter) return [];
+    if (projectComps.length === 0) return [];
+    const built = buildCompFlowLayers({
+      comps: projectComps.map((c) => ({
+        id: c.id,
+        lng: c.lng,
+        lat: c.lat,
+        label: c.tenant_name ?? c.building_name ?? "(unnamed)",
+        rentPsf: c.rent_psf == null ? null : Number(c.rent_psf),
+        sf: c.sf,
+      })),
+      target: fallbackCenter,
+      layerIdPrefix: "portviz-comps",
+    });
+    if (built.usable === 0) return [];
+    return [
+      {
+        id: built.lineLayerId,
+        type: "line" as const,
+        data: built.lines,
+        paint: COMP_FLOW_LINE_PAINT as unknown as Record<string, unknown>,
+        placement: "above" as const,
+      },
+      {
+        id: built.pinLayerId,
+        type: "circle" as const,
+        data: built.pins,
+        paint: COMP_PIN_PAINT as unknown as Record<string, unknown>,
+        placement: "above" as const,
+      },
+    ];
+  }, [projectComps, fallbackCenter]);
+
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-8">
       <Breadcrumb
@@ -523,6 +586,7 @@ export default function ProjectDetailPage({
             buildings={heroBuildings}
             fallbackCenter={fallbackCenter}
             amenities={heroAmenities}
+            extraOverlays={compFlowOverlays}
             isLoading={
               buildingsQuery.isLoading || buildingsListQuery.isLoading
             }
@@ -603,6 +667,9 @@ export default function ProjectDetailPage({
                   tenants: tenantsRollup.length
                     ? String(tenantsRollup.length)
                     : undefined,
+                  comps: projectComps.length
+                    ? String(projectComps.length)
+                    : undefined,
                 }}
               >
                 {{
@@ -619,6 +686,12 @@ export default function ProjectDetailPage({
                   available: <AvailableSpacesList rows={availableSpaces} />,
                   expirations: <ExpirationsList leases={expirationLeases} />,
                   tenants: <TenantsList tenants={tenantsRollup} />,
+                  comps: (
+                    <ProjectComps
+                      comps={projectComps}
+                      isLoading={compsQuery.isLoading}
+                    />
+                  ),
                   activity: <ActivityFeed limit={50} />,
                   documents: (
                     <DocumentUpload

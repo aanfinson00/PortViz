@@ -1,6 +1,6 @@
 "use client";
 
-import type { Feature, FeatureCollection, Polygon } from "geojson";
+import type { Feature, FeatureCollection, Geometry, Polygon } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
@@ -32,8 +32,11 @@ export interface BuildingGeom {
  */
 export interface OverlayLayer {
   id: string;
-  type: "fill" | "line";
-  data: FeatureCollection<Polygon>;
+  type: "fill" | "line" | "circle" | "symbol";
+  // Polygon-only layers (truck courts, parcels, parking) keep the original
+  // shape; flow-map overlays use Point + LineString. Mapbox accepts mixed-
+  // geometry sources, so widening the geometry param is enough.
+  data: FeatureCollection<Geometry>;
   paint: Record<string, unknown>;
   /**
    * Render order relative to the building extrusion. "below" inserts under
