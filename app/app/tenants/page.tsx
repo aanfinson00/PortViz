@@ -57,21 +57,26 @@ export default function TenantsPage() {
               contact_email: string | null;
               brand_color: string | null;
             }) => (
-              <li key={t.id} className="flex items-center gap-4 px-4 py-3">
-                <span
-                  className="inline-block h-6 w-6 flex-shrink-0 rounded-full border border-neutral-200"
-                  style={{ background: t.brand_color ?? "#e5e7eb" }}
-                />
-                <div className="flex-1">
-                  <p className="font-mono text-xs text-neutral-500">
-                    {t.code}
-                  </p>
-                  <p className="text-sm font-medium">{t.name}</p>
-                </div>
-                <div className="text-right text-xs text-neutral-600">
-                  {t.contact_name && <p>{t.contact_name}</p>}
-                  {t.contact_email && <p>{t.contact_email}</p>}
-                </div>
+              <li key={t.id}>
+                <Link
+                  href={`/app/tenants/${t.code}`}
+                  className="flex items-center gap-4 px-4 py-3 hover:bg-neutral-50"
+                >
+                  <span
+                    className="inline-block h-6 w-6 flex-shrink-0 rounded-full border border-neutral-200"
+                    style={{ background: t.brand_color ?? "#e5e7eb" }}
+                  />
+                  <div className="flex-1">
+                    <p className="font-mono text-xs text-neutral-500">
+                      {t.code}
+                    </p>
+                    <p className="text-sm font-medium">{t.name}</p>
+                  </div>
+                  <div className="text-right text-xs text-neutral-600">
+                    {t.contact_name && <p>{t.contact_name}</p>}
+                    {t.contact_email && <p>{t.contact_email}</p>}
+                  </div>
+                </Link>
               </li>
             ),
           )}

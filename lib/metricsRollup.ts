@@ -56,6 +56,7 @@ export interface ExpirationLease {
   spaceCode: string;
   buildingCode: string;
   projectCode: string;
+  tenantCode: string;
   tenantName: string;
   tenantColor: string | null;
   baseRentPsf: number | null;
@@ -125,6 +126,7 @@ export function rollupExpirations(args: {
       spaceCode: sp.code,
       buildingCode,
       projectCode: args.projectCode,
+      tenantCode: l.tenant.code,
       tenantName: l.tenant.name,
       tenantColor: l.tenant.brandColor,
       baseRentPsf: l.baseRentPsf,

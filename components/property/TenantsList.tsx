@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 interface TenantRow {
   id: string;
   code: string;
@@ -31,30 +33,32 @@ export function TenantsList({ tenants }: Props) {
   return (
     <ul className="divide-y divide-neutral-100 rounded-md border border-neutral-200 bg-white">
       {sorted.map((t) => (
-        <li
-          key={t.id}
-          className="flex items-center justify-between px-4 py-2 text-sm"
-        >
-          <span className="flex items-center gap-3">
-            <span
-              className="inline-block h-3 w-3 flex-shrink-0 rounded-sm"
-              style={{ background: t.brandColor ?? "#9ca3af" }}
-            />
-            <span>
-              <span className="font-medium">{t.name}</span>
-              <span className="ml-2 font-mono text-xs text-neutral-500">
-                {t.code}
+        <li key={t.id}>
+          <Link
+            href={`/app/tenants/${t.code}`}
+            className="flex items-center justify-between px-4 py-2 text-sm hover:bg-neutral-50"
+          >
+            <span className="flex items-center gap-3">
+              <span
+                className="inline-block h-3 w-3 flex-shrink-0 rounded-sm"
+                style={{ background: t.brandColor ?? "#9ca3af" }}
+              />
+              <span>
+                <span className="font-medium">{t.name}</span>
+                <span className="ml-2 font-mono text-xs text-neutral-500">
+                  {t.code}
+                </span>
               </span>
             </span>
-          </span>
-          <span className="flex items-center gap-4 text-xs text-neutral-600">
-            <span className="tabular-nums">
-              {t.totalSf.toLocaleString()} SF
+            <span className="flex items-center gap-4 text-xs text-neutral-600">
+              <span className="tabular-nums">
+                {t.totalSf.toLocaleString()} SF
+              </span>
+              <span className="text-neutral-500">
+                {t.spaceCount} space{t.spaceCount === 1 ? "" : "s"}
+              </span>
             </span>
-            <span className="text-neutral-500">
-              {t.spaceCount} space{t.spaceCount === 1 ? "" : "s"}
-            </span>
-          </span>
+          </Link>
         </li>
       ))}
     </ul>

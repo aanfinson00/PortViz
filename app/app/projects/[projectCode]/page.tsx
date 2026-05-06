@@ -7,6 +7,8 @@ import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { DocumentUpload } from "@/components/docs/DocumentUpload";
 import { RentRoll } from "@/components/lease/RentRoll";
 import { BuildingCard } from "@/components/property/BuildingCard";
+import { ActivityFeed } from "@/components/property/ActivityFeed";
+import { AvailableSpacesList } from "@/components/property/AvailableSpacesList";
 import { ExpirationsList } from "@/components/property/ExpirationsList";
 import { KPIStrip } from "@/components/property/KPIStrip";
 import { PropertyHero } from "@/components/property/PropertyHero";
@@ -23,6 +25,7 @@ import {
 } from "@/lib/metricsRollup";
 import {
   computePropertyMetrics,
+  spaceSf,
   type BuildingForMetrics,
 } from "@/lib/propertyMetrics";
 import {
@@ -338,6 +341,46 @@ export default function ProjectDetailPage({
     [expirationLeases],
   );
 
+  // Available-spaces rollup: every space whose status is vacant /
+  // available / pending. Drives the "Available" tab and its count badge.
+  const availableSpaces = useMemo(() => {
+    const out: Array<{
+      id: string;
+      spaceCode: string;
+      buildingCode: string;
+      projectCode: string;
+      status: "vacant" | "available" | "pending";
+      sf: number;
+    }> = [];
+    for (const card of cards) {
+      const bayById = new Map(card.bays.map((b) => [b.id, b]));
+      for (const s of card.spaces) {
+        if (
+          s.status !== "vacant" &&
+          s.status !== "available" &&
+          s.status !== "pending"
+        ) {
+          continue;
+        }
+        const sf = spaceSf(s, card.bays);
+        // Filter out 0-SF placeholder spaces unless explicitly target_sf'd
+        if (sf <= 0 && s.targetSf == null) continue;
+        out.push({
+          id: s.id,
+          spaceCode: s.code,
+          buildingCode: card.code,
+          projectCode: project.data?.code ?? "",
+          status: s.status as "vacant" | "available" | "pending",
+          sf,
+        });
+        // bayById is referenced via the helper indirectly; keep so the
+        // memoization treats card.bays as a dep cleanly.
+        void bayById;
+      }
+    }
+    return out;
+  }, [cards, project.data?.code]);
+
   const fallbackCenter: [number, number] | null =
     project.data?.lng != null && project.data?.lat != null
       ? [project.data.lng, project.data.lat]
@@ -528,6 +571,9 @@ export default function ProjectDetailPage({
             <div>
               <PropertyTabs
                 badges={{
+                  available: availableSpaces.length
+                    ? String(availableSpaces.length)
+                    : undefined,
                   expirations: expiringIn12moCount
                     ? String(expiringIn12moCount)
                     : undefined,
@@ -547,8 +593,10 @@ export default function ProjectDetailPage({
                       }
                     />
                   ),
+                  available: <AvailableSpacesList rows={availableSpaces} />,
                   expirations: <ExpirationsList leases={expirationLeases} />,
                   tenants: <TenantsList tenants={tenantsRollup} />,
+                  activity: <ActivityFeed limit={50} />,
                   documents: (
                     <DocumentUpload
                       entityType="project"

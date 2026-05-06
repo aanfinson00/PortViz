@@ -145,13 +145,16 @@ export function RentRoll({ buildingId, projectCode, buildingCode }: RentRollProp
                 </td>
                 <td className="px-4 py-2">
                   {tenant ? (
-                    <span className="flex items-center gap-2">
+                    <Link
+                      href={`/app/tenants/${tenant.code}`}
+                      className="flex items-center gap-2 hover:underline"
+                    >
                       <span
                         className="inline-block h-2.5 w-2.5 rounded-sm"
                         style={{ background: tenant.brand_color ?? "#9ca3af" }}
                       />
                       {tenant.name}
-                    </span>
+                    </Link>
                   ) : (
                     <span className="text-neutral-400">—</span>
                   )}

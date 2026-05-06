@@ -2,7 +2,13 @@
 
 import { useState, type ReactNode } from "react";
 
-export type TabKey = "rent_roll" | "expirations" | "tenants" | "documents";
+export type TabKey =
+  | "rent_roll"
+  | "expirations"
+  | "tenants"
+  | "available"
+  | "activity"
+  | "documents";
 
 interface PropertyTabsProps {
   children: Record<TabKey, ReactNode>;
@@ -13,8 +19,10 @@ interface PropertyTabsProps {
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "rent_roll", label: "Rent roll" },
+  { key: "available", label: "Available" },
   { key: "expirations", label: "Expirations" },
   { key: "tenants", label: "Tenants" },
+  { key: "activity", label: "Activity" },
   { key: "documents", label: "Documents" },
 ];
 

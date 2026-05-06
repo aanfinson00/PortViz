@@ -166,6 +166,7 @@ describe("expiringWithinMonths", () => {
       spaceCode: "x",
       buildingCode: "x",
       projectCode: "x",
+      tenantCode: "x",
       tenantName: "x",
       tenantColor: null,
       baseRentPsf: null,

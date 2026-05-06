@@ -10,6 +10,7 @@ import { documentRouter } from "./routers/document";
 import { orgRouter } from "./routers/org";
 import { shareRouter } from "./routers/share";
 import { authRouter } from "./routers/auth";
+import { eventRouter } from "./routers/event";
 import { metricsRouter } from "./routers/metrics";
 import { searchRouter } from "./routers/search";
 
@@ -23,6 +24,7 @@ export const appRouter = router({
   lease: leaseRouter,
   demising: demisingRouter,
   document: documentRouter,
+  event: eventRouter,
   metrics: metricsRouter,
   org: orgRouter,
   share: shareRouter,
