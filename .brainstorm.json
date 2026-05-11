@@ -1,0 +1,128 @@
+{
+  "domain": "PortViz is a 3D portfolio & lease visualization tool for commercial/industrial real estate; users are asset managers and leasing teams who need to map properties, demise warehouse/flex buildings bay-by-bay, model occupancy and rent roll, and share project snapshots with brokers or investors",
+  "subsystems": [
+    {
+      "name": "demising-engine",
+      "files": [
+        "lib/demising.ts",
+        "lib/sliderDemising.ts",
+        "components/demising/DemisingEditor.tsx"
+      ],
+      "patterns": [
+        "dockDoor|driveIn",
+        "frontageSide|FrontageSide",
+        "SpaceGroup|bayIds",
+        "isPinned|targetSf",
+        "leftWall|rightWall|positionOrder",
+        "splitAfter|computeSpaceMetrics"
+      ]
+    },
+    {
+      "name": "footprint-geometry",
+      "files": [
+        "lib/footprintSlicer.ts",
+        "lib/geometry.ts",
+        "components/map/FootprintEditor.tsx"
+      ],
+      "patterns": [
+        "footprint|Polygon",
+        "fill-extrusion|heightFt",
+        "truckCourt|frontageEdge",
+        "squareOff|splitFootprint",
+        "Mapbox|mapboxgl"
+      ]
+    },
+    {
+      "name": "lease-rent-roll",
+      "files": [
+        "server/trpc/routers/lease.ts",
+        "components/lease/RentRoll.tsx",
+        "lib/leaseDate.ts"
+      ],
+      "patterns": [
+        "baseRentPsf|base_rent_psf",
+        "escalationPct|escalation_pct",
+        "tiAllowance|ti_allowance",
+        "freeRentMonths|free_rent_months",
+        "commissionPsf|securityDeposit",
+        "addMonthsMinusDay|termMonths"
+      ]
+    },
+    {
+      "name": "portfolio-map",
+      "files": [
+        "components/map/PortfolioMap.tsx",
+        "components/map/BuildingExtrusionMap.tsx"
+      ],
+      "patterns": [
+        "fill-extrusion|extrusion",
+        "flyTo|fitBounds",
+        "Marker|projectPin",
+        "dropMode|pin-drop",
+        "PortfolioMap|BuildingExtrusionMap",
+        "heightMeters|footprint"
+      ]
+    },
+    {
+      "name": "data-import",
+      "files": [
+        "lib/importParser.ts",
+        "lib/importTemplate.ts"
+      ],
+      "patterns": [
+        "parseImport|ParsedBuilding",
+        "XLSX|sheet_to_json",
+        "validateReferences|RowError",
+        "hintsRow|isLikelyHintsRow",
+        "asDateISO|asUpperCode",
+        "demisingMode|demising_mode"
+      ]
+    },
+    {
+      "name": "org-access-and-sharing",
+      "files": [
+        "server/trpc/routers/org.ts",
+        "server/trpc/routers/share.ts",
+        "server/trpc/init.ts"
+      ],
+      "patterns": [
+        "org_member|orgId",
+        "createInvite|org_invite",
+        "project_share|shareToken",
+        "publicProcedure|byToken",
+        "revoked_at|service_role",
+        "editorProcedure|orgProcedure"
+      ]
+    },
+    {
+      "name": "property-metrics",
+      "files": [
+        "lib/propertyMetrics.ts",
+        "lib/metricsRollup.ts",
+        "components/property/KPIStrip.tsx"
+      ],
+      "patterns": [
+        "occupancyPct|leasedSf|vacantSf",
+        "totalSf|spaceSf",
+        "rollupTenants|TenantRollup",
+        "expiringWithinMonths|ExpirationLease",
+        "KPIStrip|brandColor"
+      ]
+    },
+    {
+      "name": "site-plan-overlay",
+      "files": [
+        "components/site-plan/TraceCanvas.tsx",
+        "components/site-plan/PlaceOnMap.tsx",
+        "lib/sitePlanScale.ts"
+      ],
+      "patterns": [
+        "TraceCanvas|PlaceOnMap",
+        "computeScale|pixelPolygonArea",
+        "canvas|pixel",
+        "scale|calibrate|anchor",
+        "transform|sitePlan"
+      ]
+    }
+  ]
+}
