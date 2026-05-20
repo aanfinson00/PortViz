@@ -14,6 +14,7 @@ import {
   type EditableSpace,
 } from "@/components/demising/SliderDemisingEditor";
 import { RentRoll } from "@/components/lease/RentRoll";
+import { ScenarioPlanner } from "@/components/scenarios/ScenarioPlanner";
 import {
   BuildingExtrusionMap,
   type BuildingGeom,
@@ -512,6 +513,15 @@ export default function BuildingDetailPage({
                 </details>
               </div>
             )}
+
+            <div className="mt-6">
+              <ScenarioPlanner
+                buildingId={building.id}
+                totalSf={Math.round(totalSfFromPolygon)}
+                demisingMode={demisingMode}
+                bays={bays}
+              />
+            </div>
 
             <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-neutral-500">
               Stats

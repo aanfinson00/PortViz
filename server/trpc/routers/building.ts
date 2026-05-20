@@ -65,6 +65,36 @@ const buildingInput = z.object({
 });
 
 export const buildingRouter = router({
+  /**
+   * Portfolio-wide list — used by the leasing-page Test Fits section so
+   * we can resolve scenario spaces back to (project, building) tuples
+   * across the org. Trimmed shape to keep the payload small.
+   */
+  listAll: orgProcedure.query(async ({ ctx }) => {
+    const { data, error } = await ctx.supabase
+      .from("building")
+      .select(
+        "id, code, project_id, total_sf, height_ft, footprint_geojson",
+      )
+      .eq("org_id", ctx.orgId)
+      .order("code");
+    if (error) throw error;
+    // Compute a rough total SF from footprint area for slider-mode
+    // snapshot resolution. polygonAreaSqFt is in lib/polygonArea.ts;
+    // keep the math out of here to avoid pulling in a server-only dep.
+    return (data ?? []).map((b) => ({
+      id: b.id,
+      code: b.code,
+      project_id: b.project_id,
+      total_sf: b.total_sf,
+      footprint_area_sf: null as number | null,
+      // The client can compute footprint_area_sf from footprint_geojson
+      // when needed; for the test-fit roll-up we use total_sf as the
+      // canonical "SF available" figure.
+      footprint_geojson: b.footprint_geojson,
+    }));
+  }),
+
   listByProject: orgProcedure
     .input(z.object({ projectId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {

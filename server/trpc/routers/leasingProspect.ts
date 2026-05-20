@@ -392,6 +392,52 @@ export const leasingProspectRouter = router({
     }
     return byStage;
   }),
+
+  /**
+   * SF-bucket test-fit: given a set of scenario spaces (each with its
+   * resolved SF), return the active prospects whose requested_sf falls
+   * within tolerance. The caller does the per-space grouping client-side
+   * via fitProspectsToSpaces; this endpoint just returns the candidate
+   * pool, so one query covers the whole scenario.
+   *
+   * Tolerance is widened slightly here vs. the default (25% server-side
+   * vs. 20% client-side) so the client can re-filter with a stricter
+   * threshold without a round trip.
+   */
+  fitCandidates: orgProcedure
+    .input(
+      z.object({
+        sfRange: z.tuple([
+          z.number().int().min(0),
+          z.number().int().min(0),
+        ]),
+        activeOnly: z.boolean().default(true),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const [lo, hi] = input.sfRange;
+      let q = ctx.supabase
+        .from("leasing_prospect")
+        .select(
+          "id, name, stage, requested_sf, broker_company, broker_name, probability_pct, project_id, building_id, space_id",
+        )
+        .eq("org_id", ctx.orgId)
+        .gte("requested_sf", lo)
+        .lte("requested_sf", hi);
+      if (input.activeOnly) {
+        q = q.in("stage", [
+          "prospect",
+          "tour",
+          "rfp",
+          "proposal",
+          "loi",
+          "lease_out",
+        ]);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    }),
 });
 
 function defaultProbability(stage: string): number {

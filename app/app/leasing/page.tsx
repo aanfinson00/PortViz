@@ -8,6 +8,7 @@ import { ProspectDetailDrawer } from "@/components/leasing/ProspectDetailDrawer"
 import { ProspectForm } from "@/components/leasing/ProspectForm";
 import { ProspectPipeline } from "@/components/leasing/ProspectPipeline";
 import { ProspectTable } from "@/components/leasing/ProspectTable";
+import { TestFitsSection } from "@/components/leasing/TestFitsSection";
 import { UploadProspects } from "@/components/leasing/UploadProspects";
 import type { ProspectListItem } from "@/components/leasing/types";
 import { toastError, toastSuccess } from "@/components/ui/Toaster";
@@ -243,6 +244,12 @@ export default function LeasingPage() {
           <div className="border-b border-neutral-200 bg-neutral-100 px-6 py-3">
             <PipelineSummary summary={summaryQuery.data ?? undefined} />
           </div>
+
+          {view === "pipeline" && all.length > 0 && (
+            <div className="border-b border-neutral-200 bg-neutral-100 px-6 py-3">
+              <TestFitsSection prospects={filtered} />
+            </div>
+          )}
 
           <section className="flex-1 overflow-hidden px-6 py-4">
             {prospectsQuery.isLoading && (
