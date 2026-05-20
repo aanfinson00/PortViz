@@ -5,6 +5,7 @@ import { bayRouter } from "./routers/bay";
 import { spaceRouter } from "./routers/space";
 import { tenantRouter } from "./routers/tenant";
 import { leaseRouter } from "./routers/lease";
+import { leasingProspectRouter } from "./routers/leasingProspect";
 import { demisingRouter } from "./routers/demising";
 import { documentRouter } from "./routers/document";
 import { orgRouter } from "./routers/org";
@@ -21,6 +22,7 @@ export const appRouter = router({
   space: spaceRouter,
   tenant: tenantRouter,
   lease: leaseRouter,
+  leasingProspect: leasingProspectRouter,
   demising: demisingRouter,
   document: documentRouter,
   metrics: metricsRouter,
